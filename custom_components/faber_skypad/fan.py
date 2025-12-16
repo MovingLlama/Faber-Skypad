@@ -123,12 +123,15 @@ class FaberFan(FanEntity):
 
     async def _send_command(self, command):
         """Hilfsfunktion zum Senden der IR Codes."""
+        # Wir fügen 'b64:' hinzu, falls es fehlt, und packen es in eine Liste
+        cmd_formatted = command if command.startswith("b64:") else f"b64:{command}"
+        
         await self.hass.services.async_call(
             "remote",
             "send_command",
             {
                 "entity_id": self._remote_entity,
-                "command": command,
+                "command": [cmd_formatted],
             },
         )
         # Kurze Pause damit das Gerät mitkommt
