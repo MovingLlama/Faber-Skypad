@@ -1,21 +1,39 @@
 """Die Faber Skypad Komponente."""
 import logging
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import Platform
 
 from .const import DOMAIN, DEFAULT_RUN_ON_MINUTES
 
 _LOGGER = logging.getLogger(__name__)
 
-# Wir fügen SWITCH und NUMBER hinzu
-PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER]
+# Wir fügen BINARY_SENSOR hinzu
+PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER, Platform.BINARY_SENSOR]
 
 class FaberRuntimeData:
     """Klasse zum Speichern von Laufzeitdaten, die zwischen Entitäten geteilt werden."""
     def __init__(self):
         self.run_on_enabled = False
         self.run_on_minutes = DEFAULT_RUN_ON_MINUTES
+        
+        # NEU: Status für den aktiven Nachlauf und Listener
+        self.run_on_active = False
+        self._listeners = []
+
+    def register_listener(self, callback_func):
+        """Registriert eine Funktion, die bei Änderungen aufgerufen wird."""
+        self._listeners.append(callback_func)
+        
+    def unregister_listener(self, callback_func):
+        """Entfernt einen Listener."""
+        if callback_func in self._listeners:
+            self._listeners.remove(callback_func)
+
+    def trigger_update(self):
+        """Informiert alle Listener über Änderungen."""
+        for callback_func in self._listeners:
+            callback_func()
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Setzt die Integration aus der Konfiguration auf."""
