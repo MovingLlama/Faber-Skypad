@@ -8,8 +8,8 @@ from .const import DOMAIN, DEFAULT_RUN_ON_MINUTES
 
 _LOGGER = logging.getLogger(__name__)
 
-# Wir fügen BINARY_SENSOR hinzu
-PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER, Platform.BINARY_SENSOR]
+# SENSOR hinzugefügt
+PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER, Platform.BINARY_SENSOR, Platform.SENSOR]
 
 class FaberRuntimeData:
     """Klasse zum Speichern von Laufzeitdaten, die zwischen Entitäten geteilt werden."""
@@ -17,8 +17,11 @@ class FaberRuntimeData:
         self.run_on_enabled = False
         self.run_on_minutes = DEFAULT_RUN_ON_MINUTES
         
-        # NEU: Status für den aktiven Nachlauf und Listener
+        # Status für den aktiven Nachlauf
         self.run_on_active = False
+        # NEU: Zeitpunkt, wann der Nachlauf endet (für den Countdown)
+        self.run_on_finish_time = None
+        
         self._listeners = []
 
     def register_listener(self, callback_func):
@@ -39,7 +42,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Setzt die Integration aus der Konfiguration auf."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Wir speichern Config UND Runtime Data zusammen
     hass.data[DOMAIN][entry.entry_id] = {
         "config": entry.data,
         "runtime_data": FaberRuntimeData()

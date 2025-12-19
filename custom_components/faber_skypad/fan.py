@@ -2,6 +2,7 @@
 import logging
 import asyncio
 from typing import Any, Optional, Dict
+from datetime import timedelta # NEU
 
 from homeassistant.components.fan import (
     FanEntity,
@@ -12,6 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.util import dt as dt_util # NEU
 
 from .const import (
     DOMAIN,
@@ -32,7 +34,6 @@ SPEED_MAPPING = {
     3: 100
 }
 
-# Preset Name auf Großbuchstaben geändert wie gewünscht
 PRESET_BOOST = "BOOST"
 
 async def async_setup_entry(
@@ -61,14 +62,13 @@ class FaberFan(FanEntity):
         self._remote_entity = remote_entity
         self._power_sensor = power_sensor
         self._entry_id = entry_id
-        self._runtime_data = runtime_data # Zugriff auf geteilte Daten
+        self._runtime_data = runtime_data
         
         self._is_on = False
         self._percentage = 0
         self._preset_mode = None
         self._current_speed_step = 0
         
-        # Für Nachlauf Logik: Cleanup Funktion für den Timer
         self._run_on_cancel_fn = None
 
     @property
@@ -109,7 +109,6 @@ class FaberFan(FanEntity):
     def preset_modes(self):
         return [PRESET_BOOST]
 
-    # Helper Property, um auf Runtime Data zuzugreifen und Updates zu triggern
     @property
     def _run_on_active(self):
         return self._runtime_data.run_on_active
@@ -118,11 +117,13 @@ class FaberFan(FanEntity):
     def _run_on_active(self, value):
         if self._runtime_data.run_on_active != value:
             self._runtime_data.run_on_active = value
+            # Wenn nicht aktiv, auch Zeit löschen
+            if not value:
+                self._runtime_data.run_on_finish_time = None
             self._runtime_data.trigger_update()
         
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Zusätzliche Attribute für den Status."""
         return {
             "run_on_active": self._run_on_active
         }
@@ -157,10 +158,9 @@ class FaberFan(FanEntity):
             self._run_on_cancel_fn()
             self._run_on_cancel_fn = None
         self._run_on_active = False
+        # Zeit Reset wird durch den Setter von _run_on_active erledigt
 
     async def async_turn_on(self, percentage: Optional[int] = None, preset_mode: Optional[str] = None, **kwargs: Any) -> None:
-        """Einschalten."""
-        # Wenn wir einschalten oder Speed ändern, brechen wir einen eventuellen Nachlauf ab
         self._cancel_run_on_timer()
 
         if not self._is_on:
@@ -179,24 +179,22 @@ class FaberFan(FanEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Ausschalten mit intelligenter Nachlauf-Logik."""
         
-        # Fall 1: Nachlauf ist konfiguriert, Lüfter ist AN, und wir sind noch NICHT im Nachlauf
         if (self._is_on and 
             self._runtime_data.run_on_enabled and 
             not self._run_on_active):
             
             _LOGGER.info("Nachlauf aktiviert. Schalte auf Stufe 1 für %s Minuten.", self._runtime_data.run_on_minutes)
             
-            # Auf Stufe 1 schalten
-            await self.async_set_percentage(33) # 33% = Stufe 1
+            await self.async_set_percentage(33)
             
-            # Status setzen
-            self._run_on_active = True
-            self.async_write_ha_state()
-            
-            # Timer setzen (Minuten in Sekunden umrechnen) mit async_call_later
+            # Timer berechnen
             delay = self._runtime_data.run_on_minutes * 60
             
-            # async_call_later gibt eine cancel-Funktion zurück
+            # NEU: Endzeit setzen für Sensor
+            self._runtime_data.run_on_finish_time = dt_util.utcnow() + timedelta(seconds=delay)
+            self._run_on_active = True # Triggered Update für Sensor
+            self.async_write_ha_state()
+            
             self._run_on_cancel_fn = async_call_later(
                 self.hass, 
                 delay, 
@@ -204,17 +202,13 @@ class FaberFan(FanEntity):
             )
             return
 
-        # Fall 2: Wir sind bereits im Nachlauf und User drückt nochmal Aus -> Sofort Aus
-        # Oder Fall 3: Nachlauf ist deaktiviert
         await self._async_execute_final_turn_off()
 
     async def _async_execute_final_turn_off_callback(self, _now):
-        """Callback für den Timer."""
         await self._async_execute_final_turn_off()
 
     async def _async_execute_final_turn_off(self):
-        """Der eigentliche Ausschalt-Prozess."""
-        self._cancel_run_on_timer() # Clean up
+        self._cancel_run_on_timer()
 
         if self._is_on:
             await self._send_command(CMD_TURN_ON_OFF)
@@ -229,8 +223,6 @@ class FaberFan(FanEntity):
             await self.async_turn_off()
             return
             
-        # Wenn User manuell Speed ändert, Nachlauf abbrechen
-        # Ausnahme: Wir sind im Nachlauf und der Befehl ist "auf Stufe 1 schalten" (was der Nachlauf selbst tut)
         if self._run_on_active and percentage != SPEED_MAPPING[1]:
              self._cancel_run_on_timer()
 
@@ -257,7 +249,7 @@ class FaberFan(FanEntity):
         self.async_write_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        self._cancel_run_on_timer() # Boost bricht Nachlauf ab
+        self._cancel_run_on_timer()
         
         if preset_mode == PRESET_BOOST:
             if not self._is_on:
@@ -265,7 +257,6 @@ class FaberFan(FanEntity):
             
             await self._send_command(CMD_BOOST)
             self._preset_mode = PRESET_BOOST
-            # Boost Reset Timer auch auf async_call_later umstellen (optional, aber konsistent)
             async_call_later(self.hass, 300, self._reset_boost_status)
         else:
             await self.async_set_percentage(self._percentage)
