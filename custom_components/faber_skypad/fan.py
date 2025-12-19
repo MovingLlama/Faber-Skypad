@@ -2,7 +2,7 @@
 import logging
 import asyncio
 from typing import Any, Optional, Dict
-from datetime import timedelta # NEU
+from datetime import timedelta
 
 from homeassistant.components.fan import (
     FanEntity,
@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.util import dt as dt_util # NEU
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -161,10 +161,22 @@ class FaberFan(FanEntity):
         # Zeit Reset wird durch den Setter von _run_on_active erledigt
 
     async def async_turn_on(self, percentage: Optional[int] = None, preset_mode: Optional[str] = None, **kwargs: Any) -> None:
+        """Einschalten."""
+        # Logik: War der Nachlauf aktiv? Dann läuft das Gerät physisch schon!
+        was_in_run_on = self._run_on_active
+        
         self._cancel_run_on_timer()
 
         if not self._is_on:
-            await self._send_command(CMD_TURN_ON_OFF)
+            if was_in_run_on:
+                # Gerät läuft bereits auf Stufe 1 durch den Nachlauf.
+                # Wir schalten es NICHT physisch an (das würde es ausschalten),
+                # sondern übernehmen nur den Status "An".
+                _LOGGER.debug("Übernehme aktiven Nachlauf in normalen Betrieb.")
+            else:
+                # Echtes Einschalten
+                await self._send_command(CMD_TURN_ON_OFF)
+            
             self._is_on = True
             self._current_speed_step = 1
             self._percentage = SPEED_MAPPING[1]
@@ -179,20 +191,27 @@ class FaberFan(FanEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Ausschalten mit intelligenter Nachlauf-Logik."""
         
+        # Fall 1: Nachlauf starten
         if (self._is_on and 
             self._runtime_data.run_on_enabled and 
             not self._run_on_active):
             
             _LOGGER.info("Nachlauf aktiviert. Schalte auf Stufe 1 für %s Minuten.", self._runtime_data.run_on_minutes)
             
+            # Physisch auf Stufe 1 stellen
             await self.async_set_percentage(33)
             
             # Timer berechnen
             delay = self._runtime_data.run_on_minutes * 60
             
-            # NEU: Endzeit setzen für Sensor
+            # Status setzen
             self._runtime_data.run_on_finish_time = dt_util.utcnow() + timedelta(seconds=delay)
-            self._run_on_active = True # Triggered Update für Sensor
+            self._run_on_active = True # Triggered Update für Sensoren
+            
+            # WICHTIG: Für Home Assistant schalten wir die Entität auf AUS (damit man sie wieder einschalten kann)
+            self._is_on = False
+            self._percentage = 0
+            self._preset_mode = None
             self.async_write_ha_state()
             
             self._run_on_cancel_fn = async_call_later(
@@ -202,15 +221,21 @@ class FaberFan(FanEntity):
             )
             return
 
+        # Fall 2: Nachlauf abbrechen oder normales Ausschalten
         await self._async_execute_final_turn_off()
 
     async def _async_execute_final_turn_off_callback(self, _now):
         await self._async_execute_final_turn_off()
 
     async def _async_execute_final_turn_off(self):
+        """Der eigentliche Ausschalt-Prozess."""
+        # Prüfen ob wir im "Fake Aus" (Nachlauf) waren, bevor wir canceln
+        was_in_run_on = self._run_on_active
+        
         self._cancel_run_on_timer()
 
-        if self._is_on:
+        # Wir schalten aus, wenn das Gerät als "An" markiert ist ODER wenn der Nachlauf lief
+        if self._is_on or was_in_run_on:
             await self._send_command(CMD_TURN_ON_OFF)
             self._is_on = False
             self._percentage = 0
@@ -223,6 +248,8 @@ class FaberFan(FanEntity):
             await self.async_turn_off()
             return
             
+        # Wenn wir aus dem Nachlauf kommen (Entität war "Aus", aber Gerät läuft),
+        # wird async_turn_on aufgerufen, welches das korrekte Handling übernimmt.
         if self._run_on_active and percentage != SPEED_MAPPING[1]:
              self._cancel_run_on_timer()
 
