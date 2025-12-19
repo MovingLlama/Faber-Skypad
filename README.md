@@ -1,93 +1,84 @@
-Faber Skypad IR Integration für Home Assistant
+# **Faber Skypad IR Integration für Home Assistant**
 
-Eine benutzerdefinierte Home Assistant Integration (Custom Component) zur Steuerung von Faber Skypad Dunstabzugshauben.
+Eine benutzerdefinierte Home Assistant Integration (Custom Component) zur Steuerung von **Faber Skypad** Dunstabzugshauben.
 
-Da diese Hauben oft nur über Infrarot (IR) gesteuert werden und keinen Status zurückmelden, implementiert diese Integration eine Smart-Logic, um den aktuellen Status (Stufe 1, 2, 3 oder Boost) zu simulieren und zu speichern.
+Da diese Hauben oft nur über Infrarot (IR) gesteuert werden und keinen Status zurückmelden, implementiert diese Integration eine **Smart-Logic**, um den aktuellen Status (Stufe 1, 2, 3 oder Boost) zu simulieren und zu speichern.
 
-✨ Funktionen
+## **✨ Funktionen**
 
-💨 Lüftersteuerung:
+* **💨 Lüftersteuerung:**  
+  * Ein/Aus  
+  * Geschwindigkeitsstufen 1, 2 und 3  
+  * Intelligente Berechnung der benötigten Tastendrücke (z.B. von Stufe 1 auf 3 sendet 2x "Stärker").  
+* **⏱️ Intelligenter Nachlauf (Neu):**  
+  * Konfigurierbare Nachlaufzeit (in Minuten).  
+  * Wenn aktiviert: Beim Ausschalten wechselt der Lüfter automatisch auf **Stufe 1** und läuft die eingestellte Zeit nach, bevor er ganz ausgeht.  
+  * Ideal, um Restfeuchtigkeit nach dem Kochen zu entfernen.  
+* **🚀 Boost Modus:**  
+  * Aktiviert den Intensiv-Modus.  
+  * Automatischer Reset des Status in Home Assistant nach 5 Minuten (synchron zum Gerät).  
+* **💡 Lichtsteuerung:**  
+  * Licht An/Aus.  
+* **🔌 Leistungsmessung (Optional):**  
+  * Vorbereitet für Smart Plugs (mit Leistungsmessung).  
+  * *Feature in Entwicklung:* Automatische Status-Korrektur basierend auf dem Watt-Verbrauch.
 
-Ein/Aus
+## **⚙️ Voraussetzungen**
 
-Geschwindigkeitsstufen 1, 2 und 3
+* Ein Infrarot-Sender, der bereits in Home Assistant integriert ist (z.B. **Broadlink RM4 Mini**).  
+* Die remote.send\_command Funktion muss für diesen Sender verfügbar sein.
 
-Intelligente Berechnung der benötigten Tastendrücke (z.B. von Stufe 1 auf 3 sendet 2x "Stärker").
+## **📥 Installation**
 
-🚀 Boost Modus:
+### **Option 1: Via HACS (Empfohlen)**
 
-Aktiviert den Intensiv-Modus.
+1. Öffne HACS in deinem Home Assistant Dashboard.  
+2. Gehe zu **Integrationen**.  
+3. Klicke oben rechts auf das Menü (drei Punkte) ➡️ **Benutzerdefinierte Repositories**.  
+4. Füge die URL dieses Repositories hinzu.  
+5. Wähle als Kategorie **Integration**.  
+6. Klicke auf **Hinzufügen** und dann auf **Herunterladen**.  
+7. Starte Home Assistant neu.
 
-Automatischer Reset des Status in Home Assistant nach 5 Minuten (synchron zum Gerät).
+### **Option 2: Manuell**
 
-💡 Lichtsteuerung:
+1. Lade dieses Repository herunter.  
+2. Kopiere den Ordner custom\_components/faber\_skypad in deinen Home Assistant config/custom\_components/ Ordner.  
+3. Starte Home Assistant neu.
 
-Licht An/Aus.
+## **🔧 Konfiguration & Nutzung**
 
-🔌 Leistungsmessung (Optional):
+Die Integration unterstützt den **Config Flow**, kann also komplett über die Benutzeroberfläche eingerichtet werden.
 
-Vorbereitet für Smart Plugs (mit Leistungsmessung).
+1. Gehe zu **Einstellungen** ➡️ **Geräte & Dienste**.  
+2. Klicke unten rechts auf **Integration hinzufügen**.  
+3. Suche nach **Faber Skypad IR**.
 
-Feature in Entwicklung: Automatische Status-Korrektur basierend auf dem Watt-Verbrauch.
+### **Nach der Installation**
 
-⚙️ Voraussetzungen
+Die Integration erstellt ein Gerät mit folgenden Entitäten:
 
-Ein Infrarot-Sender, der bereits in Home Assistant integriert ist (z.B. Broadlink RM4 Mini).
+* **Lüfter (Fan):** Zur Steuerung der Geschwindigkeit.  
+* **Licht (Light):** Für die Beleuchtung.  
+* **Nachlauf (Switch):** Ein Schalter, um die Nachlauffunktion generell zu aktivieren oder deaktivieren.  
+* **Nachlaufzeit (Number):** Ein Eingabefeld (Slider/Box), um die Minuten für den Nachlauf einzustellen (z.B. 5 Minuten).
 
-Die remote.send_command Funktion muss für diesen Sender verfügbar sein.
+### **So funktioniert der Nachlauf**
 
-📥 Installation
+1. Aktiviere den Schalter **Nachlauf**.  
+2. Stelle die **Nachlaufzeit** ein (z.B. 10 Minuten).  
+3. Wenn du fertig mit Kochen bist, schalte den Lüfter in Home Assistant **AUS**.  
+4. Der Lüfter geht **nicht** aus, sondern schaltet auf **Stufe 1**.  
+5. Nach 10 Minuten schaltet er sich automatisch komplett ab.  
+6. *Hinweis:* Drückst du während des Nachlaufs erneut auf "Aus", schaltet er sofort ab.
 
-Option 1: Via HACS (Empfohlen)
-
-Öffne HACS in deinem Home Assistant Dashboard.
-
-Gehe zu Integrationen.
-
-Klicke oben rechts auf das Menü (drei Punkte) ➡️ Benutzerdefinierte Repositories.
-
-Füge die URL dieses Repositories hinzu.
-
-Wähle als Kategorie Integration.
-
-Klicke auf Hinzufügen und dann auf Herunterladen.
-
-Starte Home Assistant neu.
-
-Option 2: Manuell
-
-Lade dieses Repository herunter.
-
-Kopiere den Ordner custom_components/faber_skypad in deinen Home Assistant config/custom_components/ Ordner.
-
-Starte Home Assistant neu.
-
-🔧 Konfiguration
-
-Die Integration unterstützt den Config Flow, kann also komplett über die Benutzeroberfläche eingerichtet werden. YAML ist nicht notwendig.
-
-Gehe zu Einstellungen ➡️ Geräte & Dienste.
-
-Klicke unten rechts auf Integration hinzufügen.
-
-Suche nach Faber Skypad IR.
-
-Fülle das Formular aus:
-
-Name: Gib dem Gerät einen Namen (z.B. "Dunstabzug").
-
-Remote Entity: Wähle deinen IR-Sender aus (z.B. remote.broadlink_rm4_mini).
-
-Power Sensor (Optional): Falls du einen Stecker mit Verbrauchsmessung hast, wähle hier den Watt-Sensor aus.
-
-🧠 Wie es funktioniert
+## **🧠 Wie es funktioniert**
 
 Da Infrarot eine "Einbahnstraße" ist, weiß Home Assistant nicht, was du manuell am Gerät drückst.
 
-Status-Speicher: Die Integration merkt sich den letzten gesendeten Befehl. Wenn du in der App "Stufe 3" wählst, weiß das System, dass es von "Stufe 1" zweimal das Signal "Stärker" senden muss.
+* **Status-Speicher:** Die Integration merkt sich den letzten gesendeten Befehl. Wenn du in der App "Stufe 3" wählst, weiß das System, dass es von "Stufe 1" zweimal das Signal "Stärker" senden muss.  
+* **Synchronisation:** Sollte der Status in Home Assistant einmal nicht mit der Realität übereinstimmen (z.B. weil jemand manuell geschaltet hat), schalte den Lüfter in Home Assistant einfach einmal **AUS** und wieder **AN**. Das setzt den internen Zähler zurück.
 
-Synchronisation: Sollte der Status in Home Assistant einmal nicht mit der Realität übereinstimmen (z.B. weil jemand manuell geschaltet hat), schalte den Lüfter in Home Assistant einfach einmal AUS und wieder AN. Das setzt den internen Zähler zurück.
-
-📝 Lizenz
+## **📝 Lizenz**
 
 MIT License

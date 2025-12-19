@@ -7,6 +7,7 @@ CONF_POWER_SENSOR = "power_sensor"
 
 # Standardwerte
 DEFAULT_DELAY = 0.5  # Sekunden Pause zwischen IR Signalen
+DEFAULT_RUN_ON_MINUTES = 5 # Standard Nachlaufzeit
 
 # IR Codes (Base64)
 CMD_TURN_ON_OFF = "JgAUABgYFy0vFxgXFi4vQxgsGBcvAA0F"
