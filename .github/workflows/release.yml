@@ -30,3 +30,4 @@ jobs:
           generate_release_notes: true # Generiert automatisch Changelogs aus Commit-Nachrichten
           draft: false
           prerelease: false
+          
