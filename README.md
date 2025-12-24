@@ -1,84 +1,84 @@
-# **Faber Skypad IR Integration für Home Assistant**
+# **Faber Skypad Integration für Home Assistant**
 
-Eine benutzerdefinierte Home Assistant Integration (Custom Component) zur Steuerung von **Faber Skypad** Dunstabzugshauben.
+Diese Integration ermöglicht die Steuerung von Faber Dunstabzugshauben (getestet mit Modell Skypad) über Home Assistant. Da diese Geräte oft nur "dumme" IR/RF-Empfänger sind und keinen Status zurückmelden, bietet diese Integration intelligente Funktionen zur Statuserkennung mittels Strommessung.
 
-Da diese Hauben oft nur über Infrarot (IR) gesteuert werden und keinen Status zurückmelden, implementiert diese Integration eine **Smart-Logic**, um den aktuellen Status (Stufe 1, 2, 3 oder Boost) zu simulieren und zu speichern.
+## **Funktionen**
 
-## **✨ Funktionen**
+* **Lüftersteuerung:** An/Aus, 3 Geschwindigkeitsstufen \+ BOOST Modus.  
+* **Lichtsteuerung:** An/Aus/Dimmen.  
+* **Intelligenter Nachlauf:** \* Einstellbare Nachlaufzeit (Standard 30 Min).  
+  * **NEU:** Eigene Sensoren für "Nachlauf Aktiv" und "Restzeit".  
+  * Lüfter wird in HA als "Aus" angezeigt, während er physisch im Nachlauf läuft, um ein erneutes Einschalten zu ermöglichen.  
+* **Strombasierte Statuserkennung (Empfohlen):**  
+  * Erkennt automatisch, ob der Lüfter manuell (per Fernbedienung) eingeschaltet wurde.  
+  * **NEU:** **Automatische Kalibrierung:** Lernt die Stromverbrauchswerte jeder Stufe, um den korrekten Status in Home Assistant anzuzeigen.  
+  * **NEU:** **Dynamische Baseline:** Lernt den Ruheverbrauch (z.B. Licht an/aus), um den Lüfterstart zuverlässig zu erkennen.
 
-* **💨 Lüftersteuerung:**  
-  * Ein/Aus  
-  * Geschwindigkeitsstufen 1, 2 und 3  
-  * Intelligente Berechnung der benötigten Tastendrücke (z.B. von Stufe 1 auf 3 sendet 2x "Stärker").  
-* **⏱️ Intelligenter Nachlauf (Neu):**  
-  * Konfigurierbare Nachlaufzeit (in Minuten).  
-  * Wenn aktiviert: Beim Ausschalten wechselt der Lüfter automatisch auf **Stufe 1** und läuft die eingestellte Zeit nach, bevor er ganz ausgeht.  
-  * Ideal, um Restfeuchtigkeit nach dem Kochen zu entfernen.  
-* **🚀 Boost Modus:**  
-  * Aktiviert den Intensiv-Modus.  
-  * Automatischer Reset des Status in Home Assistant nach 5 Minuten (synchron zum Gerät).  
-* **💡 Lichtsteuerung:**  
-  * Licht An/Aus.  
-* **🔌 Leistungsmessung (Optional):**  
-  * Vorbereitet für Smart Plugs (mit Leistungsmessung).  
-  * *Feature in Entwicklung:* Automatische Status-Korrektur basierend auf dem Watt-Verbrauch.
+## **Installation**
 
-## **⚙️ Voraussetzungen**
+### **HACS (Empfohlen)**
 
-* Ein Infrarot-Sender, der bereits in Home Assistant integriert ist (z.B. **Broadlink RM4 Mini**).  
-* Die remote.send\_command Funktion muss für diesen Sender verfügbar sein.
-
-## **📥 Installation**
-
-### **Option 1: Via HACS (Empfohlen)**
-
-1. Öffne HACS in deinem Home Assistant Dashboard.  
-2. Gehe zu **Integrationen**.  
-3. Klicke oben rechts auf das Menü (drei Punkte) ➡️ **Benutzerdefinierte Repositories**.  
-4. Füge die URL dieses Repositories hinzu.  
-5. Wähle als Kategorie **Integration**.  
-6. Klicke auf **Hinzufügen** und dann auf **Herunterladen**.  
-7. Starte Home Assistant neu.
-
-### **Option 2: Manuell**
-
-1. Lade dieses Repository herunter.  
-2. Kopiere den Ordner custom\_components/faber\_skypad in deinen Home Assistant config/custom\_components/ Ordner.  
+1. Füge dieses Repository als "Custom Repository" in HACS hinzu.  
+2. Suche nach "Faber Skypad" und installiere es.  
 3. Starte Home Assistant neu.
 
-## **🔧 Konfiguration & Nutzung**
+### **Manuell**
 
-Die Integration unterstützt den **Config Flow**, kann also komplett über die Benutzeroberfläche eingerichtet werden.
+1. Kopiere den Ordner custom\_components/faber\_skypad in deinen custom\_components Ordner.  
+2. Starte Home Assistant neu.
 
-1. Gehe zu **Einstellungen** ➡️ **Geräte & Dienste**.  
-2. Klicke unten rechts auf **Integration hinzufügen**.  
-3. Suche nach **Faber Skypad IR**.
+## **Konfiguration**
 
-### **Nach der Installation**
+Gehe zu **Einstellungen \-\> Geräte & Dienste \-\> Integration hinzufügen** und suche nach **Faber Skypad**.
 
-Die Integration erstellt ein Gerät mit folgenden Entitäten:
+### **Erforderliche Entitäten**
 
-* **Lüfter (Fan):** Zur Steuerung der Geschwindigkeit.  
-* **Licht (Light):** Für die Beleuchtung.  
-* **Nachlauf (Switch):** Ein Schalter, um die Nachlauffunktion generell zu aktivieren oder deaktivieren.  
-* **Nachlaufzeit (Number):** Ein Eingabefeld (Slider/Box), um die Minuten für den Nachlauf einzustellen (z.B. 5 Minuten).
+* **Remote Entity:** Eine remote.\* Entität (z.B. Broadlink, Harmony), die die Befehle sendet.  
+  * Die Befehle müssen in base64 kodiert sein oder als Namen in der Remote hinterlegt sein.  
+  * Erwartete Befehle: TURN\_ON\_OFF, INCREASE, DECREASE, BOOST, LIGHT, LIGHT\_DIM.
 
-### **So funktioniert der Nachlauf**
+### **Optionale Entitäten**
 
-1. Aktiviere den Schalter **Nachlauf**.  
-2. Stelle die **Nachlaufzeit** ein (z.B. 10 Minuten).  
-3. Wenn du fertig mit Kochen bist, schalte den Lüfter in Home Assistant **AUS**.  
-4. Der Lüfter geht **nicht** aus, sondern schaltet auf **Stufe 1**.  
-5. Nach 10 Minuten schaltet er sich automatisch komplett ab.  
-6. *Hinweis:* Drückst du während des Nachlaufs erneut auf "Aus", schaltet er sofort ab.
+* **Power Sensor:** Ein Sensor, der den aktuellen Stromverbrauch (in Watt) misst (z.B. Shelly Plug S, Shelly 1PM).  
+  * *Alternativ:* Ein binärer Sensor (An/Aus), falls keine Watt-Messung möglich ist (eingeschränkte Funktionalität).
 
-## **🧠 Wie es funktioniert**
+## **Kalibrierung (Neu in v1.2.0)**
 
-Da Infrarot eine "Einbahnstraße" ist, weiß Home Assistant nicht, was du manuell am Gerät drückst.
+Damit Home Assistant genau weiß, auf welcher Stufe die Haube läuft (wenn sie z.B. per Hand bedient wurde), kannst du einen Lernlauf starten.
 
-* **Status-Speicher:** Die Integration merkt sich den letzten gesendeten Befehl. Wenn du in der App "Stufe 3" wählst, weiß das System, dass es von "Stufe 1" zweimal das Signal "Stärker" senden muss.  
-* **Synchronisation:** Sollte der Status in Home Assistant einmal nicht mit der Realität übereinstimmen (z.B. weil jemand manuell geschaltet hat), schalte den Lüfter in Home Assistant einfach einmal **AUS** und wieder **AN**. Das setzt den internen Zähler zurück.
+1. Stelle sicher, dass die Haube **aus** ist (Licht kann an oder aus sein, am besten so, wie es meistens ist).  
+2. Drücke in Home Assistant den Button **"Kalibrierung Starten"**.  
+3. **Wichtig:** Bedienung während der Kalibrierung (ca. 60 Sekunden) vermeiden\!  
+4. Der Prozess:  
+   * Misst "Aus"-Verbrauch (Baseline).  
+   * Schaltet Stufe 1 an \-\> Misst.  
+   * Schaltet Stufe 2 an \-\> Misst.  
+   * Schaltet Stufe 3 an \-\> Misst.  
+   * Schaltet Boost an \-\> Misst.  
+   * Schaltet aus.  
+5. Danach werden die gelernten Werte in den Attributen des Lüfters gespeichert und für die Erkennung genutzt.
 
-## **📝 Lizenz**
+## **Entitäten**
 
-MIT License
+Nach der Einrichtung stehen folgende Entitäten zur Verfügung:
+
+| Entität | Typ | Beschreibung |
+| :---- | :---- | :---- |
+| fan.faber\_skypad | Lüfter | Hauptsteuerung für den Motor. |
+| light.faber\_skypad\_light | Licht | Steuerung für das Licht. |
+| switch.faber\_skypad\_run\_on | Schalter | Aktiviert/Deaktiviert die Nachlauf-Automatik. |
+| number.faber\_skypad\_run\_on\_time | Nummer | Einstellung der Nachlaufzeit in Minuten. |
+| binary\_sensor.faber\_skypad\_nachlauf\_aktiv | Binär Sensor | Zeigt an, ob der Nachlauf gerade aktiv ist. |
+| sensor.faber\_skypad\_nachlauf\_ende | Sensor | Zeitstempel, wann der Nachlauf endet (Countdown). |
+| button.faber\_skypad\_kalibrierung\_starten | Button | Startet den Kalibrierungs-Lauf. |
+
+## **Hinweise**
+
+* **Verzögerung:** Um zu verhindern, dass Befehle verschluckt werden, sendet die Integration Befehle mit einer Pause von 0.75 Sekunde.  
+* **Boost:** Der Boost-Modus schaltet nach 5 Minuten (geräteseitig) automatisch zurück. Home Assistant simuliert diesen Timer ebenfalls.
+
+## **Support**
+
+Bei Problemen erstelle bitte ein Issue auf GitHub.
+
+*Entwickelt für Faber Skypad, sollte aber mit den meisten Faber Hauben funktionieren, die die gleiche Logik (Eintasten-Bedienung für An/Aus) nutzen.*
