@@ -24,10 +24,9 @@ from .const import (
     CMD_INCREASE,
     CMD_DECREASE,
     CMD_BOOST,
-    DEFAULT_DELAY,
+    DEFAULT_DELAY, 
     SPEED_MAPPING,
     PRESET_BOOST,
-    COMMAND_DELAY,
     CALIBRATION_WAIT_TIME,
     MATCH_TOLERANCE,
     FALLBACK_THRESHOLD,
@@ -362,7 +361,8 @@ class FaberFan(FanEntity):
 
     async def _send_command(self, command):
         await self._send_command_raw(command)
-        await asyncio.sleep(COMMAND_DELAY)
+        # Hier nutzen wir jetzt wieder DEFAULT_DELAY
+        await asyncio.sleep(DEFAULT_DELAY)
 
     def _cancel_run_on_timer(self):
         if self._run_on_cancel_fn:

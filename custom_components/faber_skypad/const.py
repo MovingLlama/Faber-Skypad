@@ -8,16 +8,16 @@ CONF_REMOTE_ENTITY = "remote_entity"
 CONF_POWER_SENSOR = "power_sensor"
 
 # Standardwerte
-DEFAULT_RUN_ON_MINUTES = 30
-DEFAULT_DELAY = 0.75
+DEFAULT_RUN_ON_MINUTES = 1   # Korrigiert: 1 Minute Standard
+DEFAULT_DELAY = 0.75         # Korrigiert: 0.75 Sekunden Verzögerung
 
-# Commands (Base64 oder Namen, je nach Remote Implementierung)
-CMD_TURN_ON_OFF = "TURN_ON_OFF"
-CMD_INCREASE = "INCREASE"
-CMD_DECREASE = "DECREASE"
-CMD_BOOST = "BOOST"
-CMD_LIGHT = "LIGHT"
-CMD_LIGHT_DIM = "LIGHT_DIM"
+# Commands - BITTE HIER DEINE BASE64 CODES EINFÜGEN
+# Das Präfix "b64:" wird automatisch ergänzt, falls es fehlt.
+CMD_TURN_ON_OFF = "JgAUABgYFy0vFxgXFi4vQxgsGBcvAA0F"
+CMD_INCREASE = "JgASABkXRxcXFxcYRhcYQ0ctMAANBQ=="
+CMD_DECREASE = "JgASABgtMBYXFxgtLxcXWi8tLwANBQ=="
+CMD_BOOST = "JgASABgYLy0XFxgWLy4XQzBDLwANBQ=="
+CMD_LIGHT = "JgAUABkXFxYwLRgWFxcwWRgWFxdIAA0F"
 
 # Logik & Kalibrierung Einstellungen
 SPEED_MAPPING = {
@@ -27,7 +27,7 @@ SPEED_MAPPING = {
 }
 
 PRESET_BOOST = "BOOST"
-COMMAND_DELAY = 1.0        # Pause zwischen Befehlen in Sekunden
+# COMMAND_DELAY wurde entfernt, wir nutzen DEFAULT_DELAY
 CALIBRATION_WAIT_TIME = 12.0 # Wartezeit vor Messung während Kalibrierung
 MATCH_TOLERANCE = 10.0     # Watt Toleranz (+/-) für Stufenerkennung
 FALLBACK_THRESHOLD = 15.0  # Watt Puffer zur Erkennung "An", falls keine Kalibrierung existiert

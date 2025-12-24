@@ -5,7 +5,7 @@ Diese Integration ermöglicht die Steuerung von Faber Dunstabzugshauben (geteste
 ## **Funktionen**
 
 * **Lüftersteuerung:** An/Aus, 3 Geschwindigkeitsstufen \+ BOOST Modus.  
-* **Lichtsteuerung:** An/Aus/Dimmen.  
+* **Lichtsteuerung:** An/Aus.  
 * **Intelligenter Nachlauf:** \* Einstellbare Nachlaufzeit (Standard 30 Min).  
   * **NEU:** Eigene Sensoren für "Nachlauf Aktiv" und "Restzeit".  
   * Lüfter wird in HA als "Aus" angezeigt, während er physisch im Nachlauf läuft, um ein erneutes Einschalten zu ermöglichen.  
@@ -35,7 +35,7 @@ Gehe zu **Einstellungen \-\> Geräte & Dienste \-\> Integration hinzufügen** un
 
 * **Remote Entity:** Eine remote.\* Entität (z.B. Broadlink, Harmony), die die Befehle sendet.  
   * Die Befehle müssen in base64 kodiert sein oder als Namen in der Remote hinterlegt sein.  
-  * Erwartete Befehle: TURN\_ON\_OFF, INCREASE, DECREASE, BOOST, LIGHT, LIGHT\_DIM.
+  * Erwartete Befehle: TURN\_ON\_OFF, INCREASE, DECREASE, BOOST, LIGHT.
 
 ### **Optionale Entitäten**
 
