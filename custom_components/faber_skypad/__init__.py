@@ -8,8 +8,8 @@ from .const import DOMAIN, DEFAULT_RUN_ON_MINUTES
 
 _LOGGER = logging.getLogger(__name__)
 
-# SENSOR hinzugefügt
-PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER, Platform.BINARY_SENSOR, Platform.SENSOR]
+# BUTTON hinzugefügt
+PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.BUTTON]
 
 class FaberRuntimeData:
     """Klasse zum Speichern von Laufzeitdaten, die zwischen Entitäten geteilt werden."""
@@ -19,8 +19,10 @@ class FaberRuntimeData:
         
         # Status für den aktiven Nachlauf
         self.run_on_active = False
-        # NEU: Zeitpunkt, wann der Nachlauf endet (für den Countdown)
         self.run_on_finish_time = None
+        
+        # Referenz zum Lüfter für den Calibration-Button
+        self.fan_entity = None
         
         self._listeners = []
 
