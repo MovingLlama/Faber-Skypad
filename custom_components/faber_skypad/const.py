@@ -19,6 +19,7 @@ CMD_DECREASE = "JgASABgtMBYXFxgtLxcXWi8tLwANBQ=="
 CMD_BOOST = "JgASABgYLy0XFxgWLy4XQzBDLwANBQ=="
 CMD_LIGHT = "JgAUABkXFxYwLRgWFxcwWRgWFxdIAA0F"
 
+
 # Logik & Kalibrierung Einstellungen
 SPEED_MAPPING = {
     1: 33,
