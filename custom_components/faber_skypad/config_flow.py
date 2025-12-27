@@ -1,4 +1,5 @@
 """Config flow für die Faber Skypad Integration."""
+import logging
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -7,24 +8,28 @@ import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN, CONF_REMOTE_ENTITY, CONF_POWER_SENSOR
 
+_LOGGER = logging.getLogger(__name__)
+
 class FaberConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handhabt den Konfigurationsablauf."""
+    """Handhabt den Konfigurationsablauf (Ersteinrichtung)."""
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
         """Der erste Schritt beim Hinzufügen der Integration."""
         errors = {}
+        
         if user_input is not None:
+            # Validierung könnte hier erweitert werden
             return self.async_create_entry(title="Faber Skypad", data=user_input)
 
-        # Definition des Formulars
+        # Definition des Formulars für die Ersteinrichtung
         schema = vol.Schema({
-            # Fernbedienung ist Pflicht
+            # Remote ist Pflicht
             vol.Required(CONF_REMOTE_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="remote")
             ),
-            # Power Sensor ist jetzt OPTIONAL und erlaubt auch binary_sensor
+            # Power Sensor ist Optional
             vol.Optional(CONF_POWER_SENSOR): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
             ),
@@ -35,12 +40,12 @@ class FaberConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Definiert den Options Flow Handler."""
+        """Definiert den Options Flow Handler für spätere Änderungen."""
         return FaberOptionsFlowHandler(config_entry)
 
 
 class FaberOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handhabt die Optionen (nachträgliche Konfiguration)."""
+    """Handhabt die Optionen (nachträgliche Konfiguration via 'Konfigurieren')."""
 
     def __init__(self, config_entry):
         """Initialisiert den Options Flow."""
@@ -48,62 +53,68 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Zeigt das Formular mit den aktuellen Werten an."""
+        errors = {}
+
         if user_input is not None:
-            # Bestehende Daten kopieren, um nichts zu löschen
+            # Wir kopieren die bestehenden Daten, um nichts versehentlich zu löschen
             new_data = self.config_entry.data.copy()
             
-            # Remote Entity aktualisieren
-            if CONF_REMOTE_ENTITY in user_input:
+            # 1. Remote Entity Update
+            if user_input.get(CONF_REMOTE_ENTITY):
                 new_data[CONF_REMOTE_ENTITY] = user_input[CONF_REMOTE_ENTITY]
             
-            # Power Sensor aktualisieren
-            # Wenn der Nutzer nichts auswählt, wird der Key im user_input oft weggelassen oder ist None
-            if user_input.get(CONF_POWER_SENSOR):
-                new_data[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
+            # 2. Power Sensor Update
+            # Wenn der Nutzer das Feld leer lässt (Löschen) oder ändert
+            power_sensor_input = user_input.get(CONF_POWER_SENSOR)
+            
+            if power_sensor_input:
+                new_data[CONF_POWER_SENSOR] = power_sensor_input
             else:
+                # Explizites Löschen, wenn Feld leer
                 new_data[CONF_POWER_SENSOR] = None
 
-            # Wir aktualisieren die Config Entry Daten direkt
+            # Daten in der Config Entry speichern
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
             
-            # Integration neu laden, um Änderungen sofort anzuwenden
+            # Integration neu laden, damit Änderungen sofort wirksam werden
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             
+            # Options Flow beenden
             return self.async_create_entry(title="", data={})
 
-        # Aktuelle Werte aus der Konfiguration laden
-        # Wir nutzen .get() um sicherzustellen, dass es nicht abstürzt, wenn der Key fehlt
+        # --- Formular Aufbauen ---
+        
+        # Aktuelle Werte sicher laden (.get verhindert Absturz bei fehlendem Key)
         current_remote = self.config_entry.data.get(CONF_REMOTE_ENTITY)
         current_power = self.config_entry.data.get(CONF_POWER_SENSOR)
 
-        # Schema dynamisch bauen
-        fields = {}
+        schema_fields = {}
 
         # 1. Remote Entity (Pflichtfeld)
-        # Fallback: Falls remote irgendwie None ist, kein default setzen
-        if current_remote:
-            fields[vol.Required(CONF_REMOTE_ENTITY, default=current_remote)] = selector.EntitySelector(
+        # Wir prüfen, ob ein alter Wert existiert und gültig (String) ist
+        if current_remote and isinstance(current_remote, str):
+            schema_fields[vol.Required(CONF_REMOTE_ENTITY, default=current_remote)] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="remote")
             )
         else:
-            fields[vol.Required(CONF_REMOTE_ENTITY)] = selector.EntitySelector(
+            # Fallback: Kein Default, wenn Daten korrupt waren
+            schema_fields[vol.Required(CONF_REMOTE_ENTITY)] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="remote")
             )
 
         # 2. Power Sensor (Optional)
-        # WICHTIG: Wir prüfen mit "if current_power", das fängt None UND leere Strings ab.
         power_selector = selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
         )
 
-        if current_power:
-             # Nur wenn wirklich ein Wert da ist, setzen wir ihn als Default
-            fields[vol.Optional(CONF_POWER_SENSOR, default=current_power)] = power_selector
+        # Wir setzen den Default nur, wenn wirklich ein Entity-ID String da ist.
+        # Leere Listen, None oder falsche Typen werden ignoriert.
+        if current_power and isinstance(current_power, str):
+            schema_fields[vol.Optional(CONF_POWER_SENSOR, default=current_power)] = power_selector
         else:
-            # Wenn kein Wert da ist (oder None), lassen wir Default komplett weg.
-            # Das verhindert den 500er Fehler, wenn Voluptuous None als Default nicht mag.
-            fields[vol.Optional(CONF_POWER_SENSOR)] = power_selector
+            # Feld leer anzeigen
+            schema_fields[vol.Optional(CONF_POWER_SENSOR)] = power_selector
 
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_fields), errors=errors)

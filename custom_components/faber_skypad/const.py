@@ -1,5 +1,4 @@
 """Konstanten für die Faber Skypad Integration."""
-from datetime import timedelta
 
 DOMAIN = "faber_skypad"
 
