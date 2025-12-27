@@ -456,13 +456,21 @@ class FaberFan(FanEntity):
         if percentage > 66: target_step = 3
 
         current = self._current_speed_step
+        # Fallback: Wenn wir an sind, aber step 0 ist, nehmen wir an wir sind auf 1
+        if current == 0:
+            current = 1
+
         diff = target_step - current
+        
+        _LOGGER.debug(f"Set Percentage: {percentage}% -> Target Step: {target_step} (Current: {current}, Diff: {diff})")
 
         if diff > 0:
             for _ in range(diff):
+                _LOGGER.debug("Sende CMD_INCREASE")
                 await self._send_command(CMD_INCREASE)
         elif diff < 0:
             for _ in range(abs(diff)):
+                _LOGGER.debug("Sende CMD_DECREASE")
                 await self._send_command(CMD_DECREASE)
 
         self._current_speed_step = target_step
