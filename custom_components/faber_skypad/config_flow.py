@@ -57,7 +57,7 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
                 new_data[CONF_REMOTE_ENTITY] = user_input[CONF_REMOTE_ENTITY]
             
             # Power Sensor aktualisieren
-            # Wenn der Nutzer nichts auswählt (None/Leer), setzen wir es auf None
+            # Wenn der Nutzer nichts auswählt, wird der Key im user_input oft weggelassen oder ist None
             if user_input.get(CONF_POWER_SENSOR):
                 new_data[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
             else:
@@ -74,7 +74,7 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data={})
 
         # Aktuelle Werte aus der Konfiguration laden
-        # .get() liefert None zurück, wenn der Schlüssel fehlt -> Sicher
+        # Wir nutzen .get() um sicherzustellen, dass es nicht abstürzt, wenn der Key fehlt
         current_remote = self.config_entry.data.get(CONF_REMOTE_ENTITY)
         current_power = self.config_entry.data.get(CONF_POWER_SENSOR)
 
@@ -82,6 +82,7 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
         fields = {}
 
         # 1. Remote Entity (Pflichtfeld)
+        # Fallback: Falls remote irgendwie None ist, kein default setzen
         if current_remote:
             fields[vol.Required(CONF_REMOTE_ENTITY, default=current_remote)] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="remote")
@@ -92,15 +93,17 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         # 2. Power Sensor (Optional)
-        # WICHTIG: Wir prüfen explizit auf None, um Abstürze zu vermeiden
-        if current_power is not None:
-            fields[vol.Optional(CONF_POWER_SENSOR, default=current_power)] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
-            )
+        # WICHTIG: Wir prüfen mit "if current_power", das fängt None UND leere Strings ab.
+        power_selector = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+        )
+
+        if current_power:
+             # Nur wenn wirklich ein Wert da ist, setzen wir ihn als Default
+            fields[vol.Optional(CONF_POWER_SENSOR, default=current_power)] = power_selector
         else:
-            # Kein Standardwert, wenn bisher keiner gesetzt war (oder er None ist)
-            fields[vol.Optional(CONF_POWER_SENSOR)] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
-            )
+            # Wenn kein Wert da ist (oder None), lassen wir Default komplett weg.
+            # Das verhindert den 500er Fehler, wenn Voluptuous None als Default nicht mag.
+            fields[vol.Optional(CONF_POWER_SENSOR)] = power_selector
 
         return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))
