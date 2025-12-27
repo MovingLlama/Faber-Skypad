@@ -24,7 +24,7 @@ from .const import (
     CMD_INCREASE,
     CMD_DECREASE,
     CMD_BOOST,
-    DEFAULT_DELAY, 
+    DEFAULT_DELAY,
     SPEED_MAPPING,
     PRESET_BOOST,
     CALIBRATION_WAIT_TIME,
@@ -400,9 +400,12 @@ class FaberFan(FanEntity):
             self._runtime_data.run_on_enabled and 
             not self._run_on_active):
             
+            _LOGGER.info("Nachlauf aktiviert. Schalte auf Stufe 1 für %s Sekunden.", self._runtime_data.run_on_seconds)
+            
             await self.async_set_percentage(33)
             
-            delay = self._runtime_data.run_on_minutes * 60
+            delay = self._runtime_data.run_on_seconds # Direkt in Sekunden
+            
             self._runtime_data.run_on_finish_time = dt_util.utcnow() + timedelta(seconds=delay)
             self._run_on_active = True 
             

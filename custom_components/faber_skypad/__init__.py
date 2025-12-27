@@ -4,24 +4,30 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import Platform
 
-from .const import DOMAIN, DEFAULT_RUN_ON_MINUTES
+from .const import DOMAIN, DEFAULT_RUN_ON_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
-# BUTTON hinzugefügt
-PLATFORMS = [Platform.FAN, Platform.LIGHT, Platform.SWITCH, Platform.NUMBER, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.BUTTON]
+PLATFORMS = [
+    Platform.FAN, 
+    Platform.LIGHT, 
+    Platform.SWITCH, 
+    Platform.NUMBER, 
+    Platform.BINARY_SENSOR, 
+    Platform.SENSOR, 
+    Platform.BUTTON
+]
 
 class FaberRuntimeData:
     """Klasse zum Speichern von Laufzeitdaten, die zwischen Entitäten geteilt werden."""
     def __init__(self):
         self.run_on_enabled = False
-        self.run_on_minutes = DEFAULT_RUN_ON_MINUTES
+        # Variable umbenannt auf Seconds
+        self.run_on_seconds = DEFAULT_RUN_ON_SECONDS
         
-        # Status für den aktiven Nachlauf
         self.run_on_active = False
         self.run_on_finish_time = None
         
-        # Referenz zum Lüfter für den Calibration-Button
         self.fan_entity = None
         
         self._listeners = []
