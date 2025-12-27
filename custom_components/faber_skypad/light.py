@@ -16,6 +16,7 @@ from .const import (
     CONF_REMOTE_ENTITY,
     CMD_LIGHT,
     DEFAULT_DELAY,
+    CMD_HOLD_SECS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ class FaberLight(LightEntity):
             name=self._name,
             manufacturer="Faber",
             model="Skypad",
-            via_device=(DOMAIN, self._remote_entity),
+            # via_device entfernt
         )
 
     @property
@@ -74,14 +75,24 @@ class FaberLight(LightEntity):
         return {ColorMode.ONOFF}
     
     async def _send_command(self, command):
+        """Sendet einen Befehl an die Remote."""
+        if not command:
+            _LOGGER.warning("Kein Befehl für Licht konfiguriert (CMD_LIGHT ist leer).")
+            return
+
         cmd_formatted = command if command.startswith("b64:") else f"b64:{command}"
+        
+        _LOGGER.debug("Sende Licht-Befehl an %s: %s (Hold: %ss)", self._remote_entity, cmd_formatted, CMD_HOLD_SECS)
+
         await self.hass.services.async_call(
             "remote",
             "send_command",
             {
                 "entity_id": self._remote_entity,
                 "command": [cmd_formatted],
+                "hold_secs": CMD_HOLD_SECS,
             },
+            blocking=True
         )
         await asyncio.sleep(DEFAULT_DELAY)
 

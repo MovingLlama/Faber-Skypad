@@ -39,7 +39,7 @@ class FaberCalibrationButton(ButtonEntity):
             name=self._runtime_data.fan_entity.name if self._runtime_data.fan_entity else "Faber Skypad",
             manufacturer="Faber",
             model="Skypad",
-            via_device=(DOMAIN, self._remote_entity),
+            # via_device entfernt
         )
 
     async def async_press(self) -> None:

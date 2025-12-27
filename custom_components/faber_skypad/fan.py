@@ -25,6 +25,7 @@ from .const import (
     CMD_DECREASE,
     CMD_BOOST,
     DEFAULT_DELAY,
+    CMD_HOLD_SECS,
     SPEED_MAPPING,
     PRESET_BOOST,
     CALIBRATION_WAIT_TIME,
@@ -91,7 +92,7 @@ class FaberFan(FanEntity):
             name=self._name,
             manufacturer="Faber",
             model="Skypad",
-            via_device=(DOMAIN, self._remote_entity),
+            # via_device entfernt
         )
 
     @property
@@ -169,7 +170,6 @@ class FaberFan(FanEntity):
     @callback
     def _async_power_sensor_changed(self, event):
         """Erkennt den Status anhand der gelernten Profile."""
-        # Während der Kalibrierung ignorieren wir normale Updates
         if self._is_calibrating:
             return
 
@@ -223,8 +223,7 @@ class FaberFan(FanEntity):
             detected_on = True
             detected_speed = best_match
 
-        # Spezialfall Nachlauf: Wenn Nachlauf aktiv, nicht auf "An" synchen (da UI "Aus" sein soll)
-        # Nur wenn Gerät wirklich AUS geht, synchronisieren wir.
+        # Spezialfall Nachlauf: Wenn Nachlauf aktiv, nicht auf "An" synchen
         if self._run_on_active:
              if not detected_on:
                  self._cancel_run_on_timer()
@@ -347,6 +346,7 @@ class FaberFan(FanEntity):
         return 0.0
 
     async def _send_command_raw(self, command):
+        """Sendet einen Befehl an die Remote mit Hold-Zeit."""
         cmd_formatted = command if command.startswith("b64:") else f"b64:{command}"
         await self.hass.services.async_call(
             "remote",
@@ -354,6 +354,7 @@ class FaberFan(FanEntity):
             {
                 "entity_id": self._remote_entity,
                 "command": [cmd_formatted],
+                "hold_secs": CMD_HOLD_SECS,
             },
         )
 
@@ -361,7 +362,6 @@ class FaberFan(FanEntity):
 
     async def _send_command(self, command):
         await self._send_command_raw(command)
-        # Hier nutzen wir jetzt wieder DEFAULT_DELAY
         await asyncio.sleep(DEFAULT_DELAY)
 
     def _cancel_run_on_timer(self):
@@ -404,7 +404,7 @@ class FaberFan(FanEntity):
             
             await self.async_set_percentage(33)
             
-            delay = self._runtime_data.run_on_seconds # Direkt in Sekunden
+            delay = self._runtime_data.run_on_seconds 
             
             self._runtime_data.run_on_finish_time = dt_util.utcnow() + timedelta(seconds=delay)
             self._run_on_active = True 
@@ -456,7 +456,6 @@ class FaberFan(FanEntity):
         if percentage > 66: target_step = 3
 
         current = self._current_speed_step
-        # Fallback: Wenn wir an sind, aber step 0 ist, nehmen wir an wir sind auf 1
         if current == 0:
             current = 1
 

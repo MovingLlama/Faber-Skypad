@@ -43,18 +43,29 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
     """Handhabt die Optionen (nachträgliche Konfiguration)."""
 
     def __init__(self, config_entry):
+        """Initialisiert den Options Flow."""
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Zeigt das Formular mit den aktuellen Werten an."""
         if user_input is not None:
-            # Falls der Power Sensor entfernt wurde (nicht im user_input), setzen wir ihn explizit auf None
-            if CONF_POWER_SENSOR not in user_input:
-                user_input[CONF_POWER_SENSOR] = None
+            # Bestehende Daten kopieren, um nichts zu löschen (z.B. den Namen)
+            new_data = self.config_entry.data.copy()
+            
+            # Remote Entity aktualisieren
+            if CONF_REMOTE_ENTITY in user_input:
+                new_data[CONF_REMOTE_ENTITY] = user_input[CONF_REMOTE_ENTITY]
+            
+            # Power Sensor aktualisieren (oder entfernen, wenn leer)
+            if user_input.get(CONF_POWER_SENSOR):
+                new_data[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
+            else:
+                # Explizit auf None setzen, wenn abgewählt
+                new_data[CONF_POWER_SENSOR] = None
 
-            # Wir aktualisieren die Config Entry Daten direkt (nicht Options)
+            # Wir aktualisieren die Config Entry Daten direkt
             self.hass.config_entries.async_update_entry(
-                self.config_entry, data=user_input
+                self.config_entry, data=new_data
             )
             
             # Integration neu laden, um Änderungen sofort anzuwenden
@@ -66,21 +77,30 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
         current_remote = self.config_entry.data.get(CONF_REMOTE_ENTITY)
         current_power = self.config_entry.data.get(CONF_POWER_SENSOR)
 
-        # Schema bauen
-        schema_dict = {
-            vol.Required(CONF_REMOTE_ENTITY, default=current_remote): selector.EntitySelector(
+        # Schema dynamisch bauen
+        schema_dict = {}
+
+        # Remote Entity (Pflichtfeld)
+        # Fallback, falls config beschädigt ist: Kein Default
+        if current_remote:
+            schema_dict[vol.Required(CONF_REMOTE_ENTITY, default=current_remote)] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="remote")
             )
-        }
+        else:
+            schema_dict[vol.Required(CONF_REMOTE_ENTITY)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="remote")
+            )
 
-        # Power Sensor Feld (Optional)
+        # Power Sensor (Optional)
         power_selector = selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
         )
 
         if current_power:
+            # Nur wenn ein Wert da ist, setzen wir ihn als Default
             schema_dict[vol.Optional(CONF_POWER_SENSOR, default=current_power)] = power_selector
         else:
+            # Wenn kein Wert da ist (oder None), lassen wir Default weg
             schema_dict[vol.Optional(CONF_POWER_SENSOR)] = power_selector
 
         return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_dict))

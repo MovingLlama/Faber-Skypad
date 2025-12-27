@@ -41,7 +41,7 @@ class FaberRunOnTimeSensor(SensorEntity):
             name=self._base_name,
             manufacturer="Faber",
             model="Skypad",
-            via_device=(DOMAIN, self._remote_entity),
+            # via_device entfernt
         )
 
     @property
