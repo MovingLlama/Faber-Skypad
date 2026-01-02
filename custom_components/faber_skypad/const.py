@@ -9,7 +9,7 @@ CONF_POWER_SENSOR = "power_sensor"
 # Standardwerte
 DEFAULT_RUN_ON_SECONDS = 60
 DEFAULT_DELAY = 0.75
-CMD_HOLD_SECS = 0.5 
+CMD_HOLD_SECS = 0.4
 
 # Commands - Base64 Codes
 CMD_TURN_ON_OFF = "JgAUABgYFy0vFxgXFi4vQxgsGBcvAA0F"
