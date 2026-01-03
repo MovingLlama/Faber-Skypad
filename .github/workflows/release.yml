@@ -1,43 +1,59 @@
-name: Release
+
+name: Automatic Release
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Wichtig: Schreibrechte für Releases UND Repository
-    
+      contents: write
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Wichtig für Git Operationen
 
-      - name: Update manifest version
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Generate Version Number
+        id: version
         run: |
-          # Git konfigurieren für den Commit
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          # --- KONFIGURATION ---
+          # Hier auf die neue Minor Version stellen (z.B. 0.2)
+          MAJOR_MINOR="1.2" 
+          OFFSET=1
+          
+          # --- BERECHNUNG ---
+          # Aktuelle Run Number holen
+          CURRENT_RUN="${{ github.run_number }}"
+          
+          # Hier wird gerechnet: Run Number - 41
+          # $(( ... )) führt mathematische Operationen in Bash aus
+          CALCULATED_NUMBER=$((CURRENT_RUN - OFFSET))
+          
+          # Sicherheitscheck (optional): Falls das Ergebnis < 0 ist, auf 0 setzen
+          if [ "$CALCULATED_NUMBER" -lt 0 ]; then
+            CALCULATED_NUMBER=0
+          fi
 
-          # Version extrahieren
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "Neue Version: $VERSION"
+          VERSION="v${MAJOR_MINOR}.${CALCULATED_NUMBER}"
+          CLEAN_VERSION="${MAJOR_MINOR}.${CALCULATED_NUMBER}"
           
-          # manifest.json updaten
-          jq --arg ver "$VERSION" '.version = $ver' custom_components/faber_skypad/manifest.json > manifest.tmp && mv manifest.tmp custom_components/faber_skypad/manifest.json
+          # --- OUTPUT ---
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
           
-          # Änderungen committen und pushen
-          git add custom_components/faber_skypad/manifest.json
-          git commit -m "chore: bump version to $VERSION [skip ci]" || echo "Keine Änderungen zum Committen"
-          # Wir pushen auf den Branch, von dem der Tag kam (meist main/master)
-          git push origin HEAD:main || echo "Push fehlgeschlagen oder nicht notwendig"
+          echo "Original Run Number: $CURRENT_RUN"
+          echo "Generierte Version: $VERSION"
+
+      - name: Update manifest.json (Temporary for Zip)
+        run: |
+          jq --arg ver "${{ env.CLEAN_VERSION }}" '.version = $ver' custom_components/faber_skypad/manifest.json > manifest.tmp && mv manifest.tmp custom_components/faber_skypad/manifest.json
+          
+          echo "Manifest Version temporär auf ${{ env.CLEAN_VERSION }} gesetzt."
 
       - name: Zip component directory
         run: |
@@ -47,6 +63,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
           files: faber_skypad.zip
           generate_release_notes: true
           draft: false
