@@ -1,4 +1,4 @@
-"""Switch Plattform für Faber Skypad (Nachlauf Automatik)."""
+"""Switch platform for Faber Skypad (Automatic Timer)."""
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -12,7 +12,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Fügt den Switch hinzu."""
+    """Adds the switch."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     config = data["config"]
     runtime_data = data["runtime_data"]
@@ -23,10 +23,12 @@ async def async_setup_entry(
     async_add_entities([FaberRunOnSwitch(name, remote_entity, config_entry.entry_id, runtime_data)])
 
 class FaberRunOnSwitch(SwitchEntity):
-    """Schalter um den automatischen Nachlauf zu aktivieren/deaktivieren."""
+    """Switch to enable/disable the automatic timer."""
+
+    _attr_translation_key = "automatic_timer"
+    _attr_has_entity_name = True
 
     def __init__(self, name, remote_entity, entry_id, runtime_data):
-        self._name = f"{name} Nachlauf Automatik"
         self._base_name = name
         self._entry_id = entry_id
         self._remote_entity = remote_entity
@@ -39,12 +41,7 @@ class FaberRunOnSwitch(SwitchEntity):
             name=self._base_name,
             manufacturer="Faber",
             model="Skypad",
-            # via_device entfernt
         )
-
-    @property
-    def name(self):
-        return self._name
 
     @property
     def unique_id(self):

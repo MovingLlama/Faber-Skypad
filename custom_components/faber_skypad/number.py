@@ -1,4 +1,4 @@
-"""Number Plattform für Faber Skypad (Nachlauf Zeit)."""
+"""Number platform for Faber Skypad (Timer Duration)."""
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -12,7 +12,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Fügt die Number Entität hinzu."""
+    """Adds the number entity."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     config = data["config"]
     runtime_data = data["runtime_data"]
@@ -23,10 +23,12 @@ async def async_setup_entry(
     async_add_entities([FaberRunOnTimeNumber(name, remote_entity, config_entry.entry_id, runtime_data)])
 
 class FaberRunOnTimeNumber(NumberEntity):
-    """Einstellung für die Nachlaufzeit in Sekunden."""
+    """Setting for the timer duration in seconds."""
+
+    _attr_translation_key = "timer_duration"
+    _attr_has_entity_name = True
 
     def __init__(self, name, remote_entity, entry_id, runtime_data):
-        self._name = f"{name} Nachlaufzeit"
         self._base_name = name
         self._entry_id = entry_id
         self._remote_entity = remote_entity
@@ -39,12 +41,7 @@ class FaberRunOnTimeNumber(NumberEntity):
             name=self._base_name,
             manufacturer="Faber",
             model="Skypad",
-            # via_device entfernt
         )
-
-    @property
-    def name(self):
-        return self._name
 
     @property
     def unique_id(self):
@@ -56,15 +53,15 @@ class FaberRunOnTimeNumber(NumberEntity):
 
     @property
     def native_min_value(self):
-        return 10 # Minimum 10 Sekunden
+        return 10 # Minimum 10 seconds
 
     @property
     def native_max_value(self):
-        return 3600 # Maximum 1 Stunde (3600 Sekunden)
+        return 3600 # Maximum 1 hour (3600 seconds)
 
     @property
     def native_step(self):
-        return 5 # Schritte von 5 Sekunden
+        return 5 # Steps of 5 seconds
 
     @property
     def mode(self):
@@ -72,7 +69,7 @@ class FaberRunOnTimeNumber(NumberEntity):
 
     @property
     def native_unit_of_measurement(self):
-        return "s" # Einheit Sekunden
+        return "s" # Unit seconds
 
     @property
     def icon(self):

@@ -1,4 +1,4 @@
-"""Sensor Plattform für Faber Skypad (Nachlauf Countdown)."""
+"""Sensor platform for Faber Skypad (Timer Countdown)."""
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
@@ -15,7 +15,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Fügt den Sensor hinzu."""
+    """Adds the sensor."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     config = data["config"]
     runtime_data = data["runtime_data"]
@@ -25,10 +25,12 @@ async def async_setup_entry(
     async_add_entities([FaberRunOnTimeSensor(name, config_entry.entry_id, remote_entity, runtime_data)])
 
 class FaberRunOnTimeSensor(SensorEntity):
-    """Zeigt an, wann der Nachlauf endet."""
+    """Shows when the timer will end."""
+
+    _attr_translation_key = "timer_end"
+    _attr_has_entity_name = True
 
     def __init__(self, name, entry_id, remote_entity, runtime_data):
-        self._name = f"{name} Nachlauf Ende"
         self._base_name = name
         self._entry_id = entry_id
         self._remote_entity = remote_entity
@@ -41,12 +43,7 @@ class FaberRunOnTimeSensor(SensorEntity):
             name=self._base_name,
             manufacturer="Faber",
             model="Skypad",
-            # via_device entfernt
         )
-
-    @property
-    def name(self):
-        return self._name
 
     @property
     def unique_id(self):
@@ -54,12 +51,12 @@ class FaberRunOnTimeSensor(SensorEntity):
 
     @property
     def native_value(self):
-        """Gibt den Endzeitpunkt zurück."""
+        """Returns the end time."""
         return self._runtime_data.run_on_finish_time
 
     @property
     def device_class(self):
-        """Timestamp sorgt für die Countdown-Anzeige im Frontend."""
+        """Timestamp provides the countdown display in the frontend."""
         return SensorDeviceClass.TIMESTAMP
 
     @property
@@ -67,14 +64,14 @@ class FaberRunOnTimeSensor(SensorEntity):
         return "mdi:clock-end"
 
     async def async_added_to_hass(self):
-        """Registriert den Listener für Updates."""
+        """Registers the listener for updates."""
         self._runtime_data.register_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self):
-        """Entfernt den Listener."""
+        """Removes the listener."""
         self._runtime_data.unregister_listener(self._handle_update)
 
     @callback
     def _handle_update(self):
-        """Wird aufgerufen, wenn sich Runtime Data ändert."""
+        """Is called when the runtime data changes."""
         self.async_write_ha_state()

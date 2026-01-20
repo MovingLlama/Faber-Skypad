@@ -1,1 +1,51 @@
-{}
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Faber Skypad",
+                "data": {
+                    "remote_entity": "Remote Entity",
+                    "power_sensor": "Power Sensor"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Faber Skypad",
+                "data": {
+                    "remote_entity": "Remote Entity",
+                    "power_sensor": "Power Sensor"
+                }
+            }
+        }
+    },
+    "entity": {
+        "binary_sensor": {
+            "timer_active": {
+                "name": "Timer Active"
+            }
+        },
+        "button": {
+            "start_calibration": {
+                "name": "Start Calibration"
+            }
+        },
+        "number": {
+            "timer_duration": {
+                "name": "Timer Duration"
+            }
+        },
+        "sensor": {
+            "timer_end": {
+                "name": "Timer End"
+            }
+        },
+        "switch": {
+            "automatic_timer": {
+                "name": "Automatic Timer"
+            }
+        }
+    }
+}

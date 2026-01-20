@@ -1,4 +1,4 @@
-"""Button Plattform für Faber Skypad (Kalibrierung)."""
+"""Button platform for Faber Skypad (Calibration)."""
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,7 +12,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Fügt den Button hinzu."""
+    """Adds the button."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     config = data["config"]
     runtime_data = data["runtime_data"]
@@ -22,10 +22,13 @@ async def async_setup_entry(
     async_add_entities([FaberCalibrationButton(name, config_entry.entry_id, remote_entity, runtime_data)])
 
 class FaberCalibrationButton(ButtonEntity):
-    """Button um den Lernlauf zu starten."""
+    """Button to start the calibration process."""
+    
+    _attr_translation_key = "start_calibration"
+    _attr_has_entity_name = True
 
     def __init__(self, name, entry_id, remote_entity, runtime_data):
-        self._attr_name = f"{name} Kalibrierung Starten"
+        self._base_name = name
         self._entry_id = entry_id
         self._remote_entity = remote_entity
         self._runtime_data = runtime_data
@@ -36,13 +39,12 @@ class FaberCalibrationButton(ButtonEntity):
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry_id)},
-            name=self._runtime_data.fan_entity.name if self._runtime_data.fan_entity else "Faber Skypad",
+            name=self._base_name,
             manufacturer="Faber",
             model="Skypad",
-            # via_device entfernt
         )
 
     async def async_press(self) -> None:
-        """Führt den Lernlauf aus."""
+        """Executes the calibration process."""
         if self._runtime_data.fan_entity:
             await self._runtime_data.fan_entity.async_start_calibration()

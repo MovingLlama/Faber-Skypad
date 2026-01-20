@@ -1,4 +1,4 @@
-"""Binary Sensor Plattform für Faber Skypad (Nachlauf Status)."""
+"""Binary Sensor platform for Faber Skypad (Timer Status)."""
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorDeviceClass,
@@ -15,7 +15,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Fügt den Binary Sensor hinzu."""
+    """Adds the binary sensor."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     config = data["config"]
     runtime_data = data["runtime_data"]
@@ -25,10 +25,12 @@ async def async_setup_entry(
     async_add_entities([FaberRunOnActiveSensor(name, config_entry.entry_id, remote_entity, runtime_data)])
 
 class FaberRunOnActiveSensor(BinarySensorEntity):
-    """Zeigt an, ob der Nachlauf gerade aktiv läuft."""
+    """Indicates whether the timer is currently active."""
+
+    _attr_translation_key = "timer_active"
+    _attr_has_entity_name = True
 
     def __init__(self, name, entry_id, remote_entity, runtime_data):
-        self._name = f"{name} Nachlauf Aktiv"
         self._base_name = name
         self._entry_id = entry_id
         self._remote_entity = remote_entity
@@ -41,12 +43,7 @@ class FaberRunOnActiveSensor(BinarySensorEntity):
             name=self._base_name,
             manufacturer="Faber",
             model="Skypad",
-            # via_device entfernt
         )
-
-    @property
-    def name(self):
-        return self._name
 
     @property
     def unique_id(self):
@@ -54,7 +51,7 @@ class FaberRunOnActiveSensor(BinarySensorEntity):
 
     @property
     def is_on(self):
-        """Gibt True zurück, wenn der Nachlauf aktiv ist."""
+        """Returns True if the timer is active."""
         return self._runtime_data.run_on_active
 
     @property
@@ -66,14 +63,14 @@ class FaberRunOnActiveSensor(BinarySensorEntity):
         return "mdi:timer-outline" if self.is_on else "mdi:timer-off-outline"
 
     async def async_added_to_hass(self):
-        """Registriert den Listener für Updates."""
+        """Registers the listener for updates."""
         self._runtime_data.register_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self):
-        """Entfernt den Listener."""
+        """Removes the listener."""
         self._runtime_data.unregister_listener(self._handle_update)
 
     @callback
     def _handle_update(self):
-        """Wird aufgerufen, wenn sich Runtime Data ändert."""
+        """Is called when the runtime data changes."""
         self.async_write_ha_state()
