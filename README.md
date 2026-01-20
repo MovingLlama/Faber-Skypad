@@ -1,84 +1,84 @@
-# **Faber Skypad Integration für Home Assistant**
+# **Faber Skypad Integration for Home Assistant**
 
-Diese Integration ermöglicht die Steuerung von Faber Dunstabzugshauben (getestet mit Modell Skypad) über Home Assistant. Da diese Geräte oft nur "dumme" IR/RF-Empfänger sind und keinen Status zurückmelden, bietet diese Integration intelligente Funktionen zur Statuserkennung mittels Strommessung.
+This integration allows controlling Faber cooker hoods (tested with the Skypad model) via Home Assistant. Since these devices are often just "dumb" IR/RF receivers and do not report their status, this integration provides intelligent functions for status detection using power measurement.
 
-## **Funktionen**
+## **Features**
 
-* **Lüftersteuerung:** An/Aus, 3 Geschwindigkeitsstufen \+ BOOST Modus.  
-* **Lichtsteuerung:** An/Aus.  
-* **Intelligenter Nachlauf:** \* Einstellbare Nachlaufzeit (Standard 30 Min).  
-  * **NEU:** Eigene Sensoren für "Nachlauf Aktiv" und "Restzeit".  
-  * Lüfter wird in HA als "Aus" angezeigt, während er physisch im Nachlauf läuft, um ein erneutes Einschalten zu ermöglichen.  
-* **Strombasierte Statuserkennung (Empfohlen):**  
-  * Erkennt automatisch, ob der Lüfter manuell (per Fernbedienung) eingeschaltet wurde.  
-  * **NEU:** **Automatische Kalibrierung:** Lernt die Stromverbrauchswerte jeder Stufe, um den korrekten Status in Home Assistant anzuzeigen.  
-  * **NEU:** **Dynamische Baseline:** Lernt den Ruheverbrauch (z.B. Licht an/aus), um den Lüfterstart zuverlässig zu erkennen.
+*   **Fan Control:** On/Off, 3 speed levels + BOOST mode.
+*   **Light Control:** On/Off.
+*   **Intelligent Timer:** * Adjustable timer duration (default 30 min).
+    *   **NEW:** Separate sensors for "Timer Active" and "Remaining Time".
+    *   The fan is shown as "Off" in HA while it is physically running in timer mode, to allow it to be turned on again.
+*   **Power-Based Status Detection (Recommended):**
+    *   Automatically detects if the fan has been turned on manually (via remote control).
+    *   **NEW:** **Automatic Calibration:** Learns the power consumption values for each speed level to display the correct status in Home Assistant.
+    *   **NEW:** **Dynamic Baseline:** Learns the idle power consumption (e.g., light on/off) to reliably detect when the fan starts.
 
 ## **Installation**
 
-### **HACS (Empfohlen)**
+### **HACS (Recommended)**
 
-1. Füge dieses Repository als "Custom Repository" in HACS hinzu.  
-2. Suche nach "Faber Skypad" und installiere es.  
-3. Starte Home Assistant neu.
+1.  Add this repository as a "Custom Repository" in HACS.
+2.  Search for "Faber Skypad" and install it.
+3.  Restart Home Assistant.
 
-### **Manuell**
+### **Manual**
 
-1. Kopiere den Ordner custom\_components/faber\_skypad in deinen custom\_components Ordner.  
-2. Starte Home Assistant neu.
+1.  Copy the `custom_components/faber_skypad` folder into your `custom_components` folder.
+2.  Restart Home Assistant.
 
-## **Konfiguration**
+## **Configuration**
 
-Gehe zu **Einstellungen \-\> Geräte & Dienste \-\> Integration hinzufügen** und suche nach **Faber Skypad**.
+Go to **Settings -> Devices & Services -> Add Integration** and search for **Faber Skypad**.
 
-### **Erforderliche Entitäten**
+### **Required Entities**
 
-* **Remote Entity:** Eine remote.\* Entität (z.B. Broadlink, Harmony), die die Befehle sendet.  
-  * Die Befehle müssen in base64 kodiert sein oder als Namen in der Remote hinterlegt sein.  
-  * Erwartete Befehle: TURN\_ON\_OFF, INCREASE, DECREASE, BOOST, LIGHT.
+*   **Remote Entity:** A `remote.*` entity (e.g., Broadlink, Harmony) that sends the commands.
+    *   The commands must be base64 encoded or stored as names in the remote entity.
+    *   Expected commands: `TURN_ON_OFF`, `INCREASE`, `DECREASE`, `BOOST`, `LIGHT`.
 
-### **Optionale Entitäten**
+### **Optional Entities**
 
-* **Power Sensor:** Ein Sensor, der den aktuellen Stromverbrauch (in Watt) misst (z.B. Shelly Plug S, Shelly 1PM).  
-  * *Alternativ:* Ein binärer Sensor (An/Aus), falls keine Watt-Messung möglich ist (eingeschränkte Funktionalität).
+*   **Power Sensor:** A sensor that measures the current power consumption in Watts (e.g., Shelly Plug S, Shelly 1PM).
+    *   *Alternatively:* A binary sensor (On/Off) if power measurement is not possible (limited functionality).
 
-## **Kalibrierung (Neu in v1.2.0)**
+## **Calibration (New in v1.2.0)**
 
-Damit Home Assistant genau weiß, auf welcher Stufe die Haube läuft (wenn sie z.B. per Hand bedient wurde), kannst du einen Lernlauf starten.
+To let Home Assistant know exactly which speed the hood is running at (e.g., if it was operated manually), you can start a calibration process.
 
-1. Stelle sicher, dass die Haube **aus** ist (Licht kann an oder aus sein, am besten so, wie es meistens ist).  
-2. Drücke in Home Assistant den Button **"Kalibrierung Starten"**.  
-3. **Wichtig:** Bedienung während der Kalibrierung (ca. 60 Sekunden) vermeiden\!  
-4. Der Prozess:  
-   * Misst "Aus"-Verbrauch (Baseline).  
-   * Schaltet Stufe 1 an \-\> Misst.  
-   * Schaltet Stufe 2 an \-\> Misst.  
-   * Schaltet Stufe 3 an \-\> Misst.  
-   * Schaltet Boost an \-\> Misst.  
-   * Schaltet aus.  
-5. Danach werden die gelernten Werte in den Attributen des Lüfters gespeichert und für die Erkennung genutzt.
+1.  Make sure the hood is **off** (the light can be on or off, preferably in its usual state).
+2.  In Home Assistant, press the **"Start Calibration"** button.
+3.  **Important:** Avoid operating the hood during calibration (approx. 60 seconds)!
+4.  The process:
+    *   Measures "Off" consumption (baseline).
+    *   Turns on speed 1 -> Measures.
+    *   Turns on speed 2 -> Measures.
+    *   Turns on speed 3 -> Measures.
+    *   Turns on Boost -> Measures.
+    *   Turns off.
+5.  Afterward, the learned values are saved in the fan's attributes and used for detection.
 
-## **Entitäten**
+## **Entities**
 
-Nach der Einrichtung stehen folgende Entitäten zur Verfügung:
+After setup, the following entities are available:
 
-| Entität | Typ | Beschreibung |
-| :---- | :---- | :---- |
-| fan.faber\_skypad | Lüfter | Hauptsteuerung für den Motor. |
-| light.faber\_skypad\_light | Licht | Steuerung für das Licht. |
-| switch.faber\_skypad\_run\_on | Schalter | Aktiviert/Deaktiviert die Nachlauf-Automatik. |
-| number.faber\_skypad\_run\_on\_time | Nummer | Einstellung der Nachlaufzeit in Minuten. |
-| binary\_sensor.faber\_skypad\_nachlauf\_aktiv | Binär Sensor | Zeigt an, ob der Nachlauf gerade aktiv ist. |
-| sensor.faber\_skypad\_nachlauf\_ende | Sensor | Zeitstempel, wann der Nachlauf endet (Countdown). |
-| button.faber\_skypad\_kalibrierung\_starten | Button | Startet den Kalibrierungs-Lauf. |
+| Entity | Type | Description |
+| :--- | :--- | :--- |
+| `fan.faber_skypad` | Fan | Main control for the motor. |
+| `light.faber_skypad_light` | Light | Control for the light. |
+| `switch.faber_skypad_run_on` | Switch | Enables/Disables the automatic timer. |
+| `number.faber_skypad_run_on_time` | Number | Sets the timer duration in minutes. |
+| `binary_sensor.faber_skypad_timer_active` | Binary Sensor | Indicates if the timer is currently active. |
+| `sensor.faber_skypad_timer_end` | Sensor | Timestamp of when the timer will end (countdown). |
+| `button.faber_skypad_start_calibration`| Button | Starts the calibration process. |
 
-## **Hinweise**
+## **Notes**
 
-* **Verzögerung:** Um zu verhindern, dass Befehle verschluckt werden, sendet die Integration Befehle mit einer Pause von 0.75 Sekunde.  
-* **Boost:** Der Boost-Modus schaltet nach 5 Minuten (geräteseitig) automatisch zurück. Home Assistant simuliert diesen Timer ebenfalls.
+*   **Delay:** To prevent commands from being missed, the integration sends commands with a 0.75-second pause.
+*   **Boost:** The boost mode automatically switches back after 5 minutes (device-side). Home Assistant also simulates this timer.
 
 ## **Support**
 
-Bei Problemen erstelle bitte ein Issue auf GitHub.
+For problems, please create an Issue on GitHub.
 
-*Entwickelt für Faber Skypad, sollte aber mit den meisten Faber Hauben funktionieren, die die gleiche Logik (Eintasten-Bedienung für An/Aus) nutzen.*
+*Developed for Faber Skypad, but should work with most Faber hoods that use the same logic (single-button operation for On/Off).*
