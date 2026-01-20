@@ -23,8 +23,8 @@ jobs:
         run: |
           # --- KONFIGURATION ---
           # Hier auf die neue Minor Version stellen (z.B. 0.2)
-          MAJOR_MINOR="1.3" 
-          OFFSET=11
+          MAJOR_MINOR="1.4" 
+          OFFSET=14
           
           # --- BERECHNUNG ---
           # Aktuelle Run Number holen
