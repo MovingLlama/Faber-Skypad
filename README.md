@@ -71,6 +71,8 @@ After setup, the following entities are available:
 | `binary_sensor.faber_skypad_timer_active` | Binary Sensor | Indicates if the timer is currently active. |
 | `sensor.faber_skypad_timer_end` | Sensor | Timestamp of when the timer will end (countdown). |
 | `button.faber_skypad_start_calibration`| Button | Starts the calibration process. |
+| `button.faber_skypad_sync_fan`| Button | Sends the fan command (without changing HA state, for asynchronous correction). |
+| `button.faber_skypad_sync_light`| Button | Sends the light command (without changing HA state, for asynchronous correction). |
 
 ## **Notes**
 
