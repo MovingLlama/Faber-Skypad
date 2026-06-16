@@ -349,59 +349,63 @@ class FaberFan(FanEntity):
             self._retry_check_cancel_fn = None
 
     async def send_command_with_retry(self, command, retry_count=0):
-        """Sendet einen Befehl und prüft nach 2 Sekunden, ob sich die Leistung geändert hat."""
+        """Sendet einen Befehl und prüft nach 2 bzw. 5 Sekunden, ob sich die Leistung geändert hat."""
         if not self._power_sensor or self._is_calibrating:
             # Ohne Leistungssensor oder während der Kalibrierung direkt senden
             await self._send_command_raw(command)
             return
 
-        self._cancel_retry_check()
+        # Bei der ersten Ausführung (retry_count == 0) Leistung aufzeichnen
+        if retry_count == 0:
+            self._cancel_retry_check()
+            self._power_before_command = self._get_current_power()
+            self._pending_command = command
 
-        self._power_before_command = self._get_current_power()
-        self._pending_command = command
         self._pending_command_retries = retry_count
 
-        _LOGGER.debug("Sende Befehl mit Retry-Logik (Versuch %d): %s. Leistung vorher: %.1fW", retry_count + 1, command, self._power_before_command)
+        _LOGGER.debug(
+            "Sende Befehl (Versuch %d): %s. Leistung vor dem ersten Versuch: %.1fW",
+            retry_count + 1,
+            command,
+            self._power_before_command
+        )
         await self._send_command_raw(command)
 
+        # Erster Retry nach 2 Sekunden, danach alle 5 Sekunden (endlos bis Erfolg)
+        delay = 2.0 if retry_count == 0 else 5.0
+
         self._retry_check_cancel_fn = async_call_later(
-            self.hass, 2.0, self._async_check_power_change
+            self.hass, delay, self._async_check_power_change
         )
 
     async def _async_check_power_change(self, _now):
-        """Überprüft, ob sich die Leistung nach dem Befehl geändert hat. Wenn nicht, wird wiederholt."""
-        if self._is_calibrating:
+        """Überprüft, ob sich die Leistung seit dem ersten Senden geändert hat. Wenn nicht, wird wiederholt."""
+        if self._is_calibrating or not self._pending_command:
             return
 
         current_power = self._get_current_power()
         power_diff = abs(current_power - self._power_before_command)
         
-        # 3.0W Toleranz (Licht hat ca. 7-10W, Lüfterstufen haben ähnliche/höhere Leistungssprünge)
+        # 3.0W Toleranz
         if power_diff < 3.0:
-            if self._pending_command_retries < 2:  # Maximal 2 Wiederholungen (insgesamt 3 Versuche)
-                _LOGGER.warning(
-                    "Leistung hat sich nach Befehl nicht geändert (Vorher: %.1fW, Jetzt: %.1fW). Wiederhole Befehl %s (Versuch %d)...",
-                    self._power_before_command,
-                    current_power,
-                    self._pending_command,
-                    self._pending_command_retries + 2
-                )
-                await self.send_command_with_retry(
-                    self._pending_command,
-                    retry_count=self._pending_command_retries + 1
-                )
-            else:
-                _LOGGER.error(
-                    "Leistung hat sich nach 2 Wiederholungen für Befehl %s nicht geändert. Gebe auf.",
-                    self._pending_command
-                )
-                self._pending_command = None
+            _LOGGER.warning(
+                "Leistung hat sich nach Befehl nicht geändert (Vorher: %.1fW, Jetzt: %.1fW). Wiederhole Befehl %s (Versuch %d)...",
+                self._power_before_command,
+                current_power,
+                self._pending_command,
+                self._pending_command_retries + 2
+            )
+            await self.send_command_with_retry(
+                self._pending_command,
+                retry_count=self._pending_command_retries + 1
+            )
         else:
             _LOGGER.debug(
-                "Befehl %s erfolgreich (Leistung geändert von %.1fW auf %.1fW).",
+                "Befehl %s erfolgreich (Leistung geändert von %.1fW auf %.1fW nach %d Versuchen).",
                 self._pending_command,
                 self._power_before_command,
-                current_power
+                current_power,
+                self._pending_command_retries + 1
             )
             self._pending_command = None
 
