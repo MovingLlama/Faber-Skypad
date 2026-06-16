@@ -216,66 +216,87 @@ class FaberFan(FanEntity):
 
         # Profil-Matching
         best_match = None
-        min_diff = float("inf")
+        min_diff = 0.0
 
-        for mode, profile_watt in self._power_profile.items():
-            # Überspringe Modi mit 0W (außer "off"), da sie nicht kalibriert sind
-            if profile_watt == 0.0 and mode != "off":
-                continue
-            
-            diff = abs(current_power - profile_watt)
-            if diff < min_diff:
-                min_diff = diff
-                best_match = mode
+        is_calibrated = (self._power_profile.get("fan_1", 0.0) != 0.0)
 
-        # Fallback Logik wenn keine Kalibrierung vorhanden
-        if self._power_profile.get("fan_1", 0.0) == 0.0:
+        if not is_calibrated:
+            # Fallback Logik wenn keine Kalibrierung vorhanden
             threshold = self._power_profile.get("off", 0.0) + FALLBACK_THRESHOLD
             if current_power > threshold:
                 best_match = "fan_1"
             else:
                 best_match = "off"
+            
+            detected_fan_on = (best_match == "fan_1")
+            detected_fan_speed = 1 if detected_fan_on else 0
+            detected_fan_preset = None
+            detected_light_on = False
+        else:
+            # Kalibrierte Logik mit Hysterese für Licht
+            speed_steps = {
+                "off": ("off", "light_on"),
+                "fan_1": ("fan_1", "fan_1_light"),
+                "fan_2": ("fan_2", "fan_2_light"),
+                "fan_3": ("fan_3", "fan_3_light"),
+                "fan_boost": ("fan_boost", "fan_boost_light"),
+            }
 
-        # Auswerten der ermittelten Zustände
-        detected_fan_on = False
-        detected_fan_speed = 0
-        detected_fan_preset = None
-        detected_light_on = False
+            # Bestimme die Lüfterstufe basierend auf dem Mittelwert der jeweiligen Stufe
+            best_speed = None
+            min_speed_diff = float("inf")
+            for speed, (base_key, light_key) in speed_steps.items():
+                w_base = self._power_profile.get(base_key, 0.0)
+                w_light = self._power_profile.get(light_key, 0.0)
+                if w_light == 0.0 and speed != "off":
+                    w_light = w_base + 8.0
+                
+                midpoint = (w_base + w_light) / 2.0
+                diff = abs(current_power - midpoint)
+                if diff < min_speed_diff:
+                    min_speed_diff = diff
+                    best_speed = speed
 
-        if best_match == "off":
-            pass
-        elif best_match == "light_on":
-            detected_light_on = True
-        elif best_match == "fan_1":
-            detected_fan_on = True
-            detected_fan_speed = 1
-        elif best_match == "fan_1_light":
-            detected_fan_on = True
-            detected_fan_speed = 1
-            detected_light_on = True
-        elif best_match == "fan_2":
-            detected_fan_on = True
-            detected_fan_speed = 2
-        elif best_match == "fan_2_light":
-            detected_fan_on = True
-            detected_fan_speed = 2
-            detected_light_on = True
-        elif best_match == "fan_3":
-            detected_fan_on = True
-            detected_fan_speed = 3
-        elif best_match == "fan_3_light":
-            detected_fan_on = True
-            detected_fan_speed = 3
-            detected_light_on = True
-        elif best_match == "fan_boost":
-            detected_fan_on = True
-            detected_fan_speed = 3
-            detected_fan_preset = PRESET_BOOST
-        elif best_match == "fan_boost_light":
-            detected_fan_on = True
-            detected_fan_speed = 3
-            detected_fan_preset = PRESET_BOOST
-            detected_light_on = True
+            # Bestimme den Lichtstatus mit Hysterese
+            base_key, light_key = speed_steps[best_speed]
+            w_base = self._power_profile.get(base_key, 0.0)
+            w_light = self._power_profile.get(light_key, 0.0)
+            if w_light == 0.0:
+                w_light = w_base + 8.0
+
+            delta_p_light = max(w_light - w_base, 6.0)
+
+            light_entity = self._runtime_data.light_entity
+            light_was_on = light_entity.is_on if light_entity else False
+
+            if light_was_on:
+                # Licht bleibt an, außer die Leistung fällt unter base + 30% des Lichtverbrauchs
+                detected_light_on = (current_power >= w_base + 0.3 * delta_p_light)
+            else:
+                # Licht bleibt aus, außer die Leistung steigt über base + 70% des Lichtverbrauchs
+                detected_light_on = (current_power >= w_base + 0.7 * delta_p_light)
+
+            detected_fan_on = (best_speed != "off")
+            detected_fan_speed = 0
+            detected_fan_preset = None
+
+            if best_speed == "fan_1":
+                detected_fan_speed = 1
+            elif best_speed == "fan_2":
+                detected_fan_speed = 2
+            elif best_speed == "fan_3":
+                detected_fan_speed = 3
+            elif best_speed == "fan_boost":
+                detected_fan_speed = 3
+                detected_fan_preset = PRESET_BOOST
+
+            best_match = f"{best_speed}{'_light' if detected_light_on else ''}"
+            if best_match == "off_light":
+                best_match = "light_on"
+
+            # Berechne min_diff zum erwarteten Wert des gematchten Status
+            matched_watt = self._power_profile.get(best_match, w_light if detected_light_on else w_base)
+            min_diff = abs(current_power - matched_watt)
 
         # Spezialfall Nachlauf: Wenn Nachlauf aktiv, nicht auf "An" synchen
         if self._run_on_active:
