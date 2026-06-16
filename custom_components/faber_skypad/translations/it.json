@@ -40,6 +40,9 @@
         "sensor": {
             "timer_end": {
                 "name": "Fine Timer"
+            },
+            "last_calibration": {
+                "name": "Ultima Calibrazione"
             }
         },
         "switch": {

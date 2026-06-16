@@ -527,7 +527,11 @@ class FaberFan(FanEntity):
         self._current_speed_step = 0
         
         # In ConfigEntry persistieren
-        new_data = {**self._config_entry.data, "power_profile": self._power_profile}
+        new_data = {
+            **self._config_entry.data,
+            "power_profile": self._power_profile,
+            "last_calibration": dt_util.utcnow().isoformat()
+        }
         self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
         
         self.async_write_ha_state()

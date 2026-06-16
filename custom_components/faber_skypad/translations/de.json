@@ -40,6 +40,9 @@
         "sensor": {
             "timer_end": {
                 "name": "Nachlauf Ende"
+            },
+            "last_calibration": {
+                "name": "Letzte Kalibrierung"
             }
         },
         "switch": {
