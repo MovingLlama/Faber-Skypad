@@ -451,15 +451,39 @@ class FaberFan(FanEntity):
             _LOGGER.warning("Kalibrierung läuft bereits.")
             return
 
-        _LOGGER.info("Starte Faber Skypad Kalibrierung... Bitte stellen Sie sicher, dass Lüfter und Licht ausgeschaltet sind.")
+        _LOGGER.info("Initialisiere Faber Skypad Kalibrierung. Schalte Geräte aus...")
         self._is_calibrating = True
         self._calibration_step = 0
         self._runtime_data.trigger_update()
         self.async_write_ha_state()
 
-        # Step 0: Baseline (Alles aus) messen
-        # Da wir annehmen, dass alles aus ist, warten wir nur auf das Einpendeln
-        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_0_measure_off)
+        # Starte die Ausschalt-Sequenz vor Schritt 0
+        self.hass.async_create_task(self._async_prepare_calibration())
+
+    async def _async_prepare_calibration(self):
+        """Schaltet Lüfter und Licht aus, falls sie aktiv sind, bevor die Kalibrierung startet."""
+        current_power = self._get_current_power()
+        
+        # 1. Wenn Leistung sehr hoch (> 12W), läuft vermutlich der Lüfter
+        if current_power > 12.0:
+            _LOGGER.info("Lüfter scheint zu laufen (%.1fW). Sende Ausschalt-Befehl...", current_power)
+            await self._send_command_raw(CMD_TURN_ON_OFF)
+            await asyncio.sleep(10.0) # Warte auf das Herunterfahren des Lüfters
+            current_power = self._get_current_power()
+
+        # 2. Wenn Leistung immer noch über Standby (> 6W), ist vermutlich das Licht an
+        if current_power > 6.0:
+            _LOGGER.info("Licht scheint an zu sein (%.1fW). Sende Licht-Befehl...", current_power)
+            await self._send_command_raw(CMD_LIGHT)
+            await asyncio.sleep(10.0) # Warte auf Absinken der Leistung
+            current_power = self._get_current_power()
+
+        _LOGGER.info("Geräte ausgeschaltet (Leistung bei %.1fW). Starte Baseline-Messung in %s Sekunden...", current_power, CALIBRATION_WAIT_TIME)
+        
+        # Jetzt erst den eigentlichen Timer für Schritt 0 starten
+        self._calibration_step_cancel = async_call_later(
+            self.hass, CALIBRATION_WAIT_TIME, self._calib_step_0_measure_off
+        )
 
     async def async_cancel_calibration(self):
         """Bricht den Kalibrierungsprozess vorzeitig ab und schaltet alles aus."""
@@ -472,15 +496,8 @@ class FaberFan(FanEntity):
             self._calibration_step_cancel()
             self._calibration_step_cancel = None
             
-        # Ermittle den aktuellen Zustand anhand des Schritts und schalte gezielt aus
-        # Licht ausschalten, falls es an war (Schritte: 1, 3, 5, 7, 9)
-        if self._calibration_step in (1, 3, 5, 7, 9):
-            await self._send_command_raw(CMD_LIGHT)
-            
-        # Lüfter ausschalten, falls er an war (Schritte: 2, 3, 4, 5, 6, 7, 8, 9)
-        if self._calibration_step in (2, 3, 4, 5, 6, 7, 8, 9):
-            await self._send_command_raw(CMD_TURN_ON_OFF)
-            
+        step = self._calibration_step
+
         self._is_calibrating = False
         self._is_on = False
         self._percentage = 0
@@ -494,6 +511,13 @@ class FaberFan(FanEntity):
         light_entity = self._runtime_data.light_entity
         if light_entity is not None:
             light_entity.set_state_externally(False)
+
+        # Ermittle den aktuellen Zustand anhand des Schritts und schalte gezielt aus mit Retry-Absicherung
+        if step in (1, 3, 5, 7, 9):
+            await self._send_command(CMD_LIGHT)
+            
+        if step in (2, 3, 4, 5, 6, 7, 8, 9):
+            await self._send_command(CMD_TURN_ON_OFF)
 
     async def _calib_step_0_measure_off(self, _now):
         val = self._get_current_power()
@@ -594,10 +618,6 @@ class FaberFan(FanEntity):
         self._power_profile["fan_boost_light"] = val
         _LOGGER.info(f"Kalibrierung: Lüfter Boost + Licht = {val} W")
         
-        # Licht aus, Lüfter aus
-        await self._send_command(CMD_LIGHT)
-        await self._send_command(CMD_TURN_ON_OFF)
-        
         self._is_calibrating = False
         self._is_on = False
         self._percentage = 0
@@ -620,6 +640,10 @@ class FaberFan(FanEntity):
         light_entity = self._runtime_data.light_entity
         if light_entity is not None:
             light_entity.set_state_externally(False)
+
+        # Licht aus, Lüfter aus (mit Retry-Absicherung, da Kalibrierung beendet ist)
+        await self._send_command(CMD_LIGHT)
+        await self._send_command(CMD_TURN_ON_OFF)
 
         _LOGGER.info("Kalibrierung erfolgreich abgeschlossen und dauerhaft gespeichert.")
 
