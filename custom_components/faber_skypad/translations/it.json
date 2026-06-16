@@ -27,11 +27,6 @@
                 "name": "Timer Attivo"
             }
         },
-        "button": {
-            "start_calibration": {
-                "name": "Avvia Calibrazione"
-            }
-        },
         "number": {
             "timer_duration": {
                 "name": "Durata Timer"
@@ -48,6 +43,9 @@
         "switch": {
             "automatic_timer": {
                 "name": "Timer Automatico"
+            },
+            "calibration": {
+                "name": "Calibrazione"
             }
         }
     }

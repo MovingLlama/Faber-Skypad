@@ -27,11 +27,6 @@
                 "name": "Nachlauf Aktiv"
             }
         },
-        "button": {
-            "start_calibration": {
-                "name": "Kalibrierung Starten"
-            }
-        },
         "number": {
             "timer_duration": {
                 "name": "Nachlaufzeit"
@@ -48,6 +43,9 @@
         "switch": {
             "automatic_timer": {
                 "name": "Nachlauf Automatik"
+            },
+            "calibration": {
+                "name": "Kalibrierung"
             }
         }
     }
