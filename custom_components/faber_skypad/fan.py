@@ -49,7 +49,7 @@ async def async_setup_entry(
     power_sensor = config.get(CONF_POWER_SENSOR)
     name = config.get("name", "Faber Skypad")
 
-    fan = FaberFan(hass, name, remote_entity, power_sensor, config_entry.entry_id, runtime_data)
+    fan = FaberFan(hass, name, remote_entity, power_sensor, config_entry, runtime_data)
     # Fan in Runtime Data registrieren für Button Zugriff
     runtime_data.fan_entity = fan
     
@@ -59,12 +59,13 @@ async def async_setup_entry(
 class FaberFan(FanEntity):
     """Repräsentation des Faber Skypad Lüfters."""
 
-    def __init__(self, hass, name, remote_entity, power_sensor, entry_id, runtime_data):
+    def __init__(self, hass, name, remote_entity, power_sensor, config_entry, runtime_data):
         self.hass = hass
         self._name = name
         self._remote_entity = remote_entity
         self._power_sensor = power_sensor
-        self._entry_id = entry_id
+        self._config_entry = config_entry
+        self._entry_id = config_entry.entry_id
         self._runtime_data = runtime_data
         
         self._is_on = False
@@ -77,13 +78,24 @@ class FaberFan(FanEntity):
         # Kalibrierungs-Daten
         self._is_calibrating = False
         self._calibration_step_cancel = None
-        self._power_profile = {
+        self._power_profile = self._config_entry.data.get("power_profile", {
             "off": 0.0,
-            1: 0.0,
-            2: 0.0,
-            3: 0.0,
-            "boost": 0.0
-        }
+            "light_on": 0.0,
+            "fan_1": 0.0,
+            "fan_1_light": 0.0,
+            "fan_2": 0.0,
+            "fan_2_light": 0.0,
+            "fan_3": 0.0,
+            "fan_3_light": 0.0,
+            "fan_boost": 0.0,
+            "fan_boost_light": 0.0,
+        })
+
+        # Retry-Logik Daten
+        self._retry_check_cancel_fn = None
+        self._power_before_command = 0.0
+        self._pending_command = None
+        self._pending_command_retries = 0
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -92,7 +104,6 @@ class FaberFan(FanEntity):
             name=self._name,
             manufacturer="Faber",
             model="Skypad",
-            # via_device entfernt
         )
 
     @property
@@ -144,10 +155,15 @@ class FaberFan(FanEntity):
         if self._power_sensor:
             # Zeige die gelernten Werte im GUI
             attrs["power_profile_off"] = f"{self._power_profile.get('off', 0):.1f} W"
-            attrs["power_profile_1"] = f"{self._power_profile.get(1, 0):.1f} W"
-            attrs["power_profile_2"] = f"{self._power_profile.get(2, 0):.1f} W"
-            attrs["power_profile_3"] = f"{self._power_profile.get(3, 0):.1f} W"
-            attrs["power_profile_boost"] = f"{self._power_profile.get('boost', 0):.1f} W"
+            attrs["power_profile_light_on"] = f"{self._power_profile.get('light_on', 0):.1f} W"
+            attrs["power_profile_1"] = f"{self._power_profile.get('fan_1', 0):.1f} W"
+            attrs["power_profile_1_light"] = f"{self._power_profile.get('fan_1_light', 0):.1f} W"
+            attrs["power_profile_2"] = f"{self._power_profile.get('fan_2', 0):.1f} W"
+            attrs["power_profile_2_light"] = f"{self._power_profile.get('fan_2_light', 0):.1f} W"
+            attrs["power_profile_3"] = f"{self._power_profile.get('fan_3', 0):.1f} W"
+            attrs["power_profile_3_light"] = f"{self._power_profile.get('fan_3_light', 0):.1f} W"
+            attrs["power_profile_boost"] = f"{self._power_profile.get('fan_boost', 0):.1f} W"
+            attrs["power_profile_boost_light"] = f"{self._power_profile.get('fan_boost_light', 0):.1f} W"
         return attrs
 
     async def async_added_to_hass(self):
@@ -161,7 +177,9 @@ class FaberFan(FanEntity):
             state = self.hass.states.get(self._power_sensor)
             if state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 try:
-                    self._power_profile["off"] = float(state.state)
+                    # Nur zuweisen, wenn noch kein "off" gelernt wurde
+                    if self._power_profile.get("off", 0.0) == 0.0:
+                        self._power_profile["off"] = float(state.state)
                 except ValueError:
                     pass
 
@@ -187,70 +205,119 @@ class FaberFan(FanEntity):
                 self._update_state_from_binary(False)
             return
 
+        # Wenn ein Befehl aussteht, prüfe ob die Leistungsänderung den Erfolg bestätigt
+        if self._pending_command:
+            power_diff = abs(current_power - self._power_before_command)
+            if power_diff >= 3.0:
+                _LOGGER.debug("Leistungssensor-Änderung bestätigt Befehlserfolg (Diff: %.1fW). Breche Wiederholungstimer ab.", power_diff)
+                self._cancel_retry_check()
+
         # Profil-Matching
         best_match = None
         min_diff = float("inf")
 
         for mode, profile_watt in self._power_profile.items():
-            if profile_watt == 0 and mode != "off": continue
+            # Überspringe Modi mit 0W (außer "off"), da sie nicht kalibriert sind
+            if profile_watt == 0.0 and mode != "off":
+                continue
             
             diff = abs(current_power - profile_watt)
             if diff < min_diff:
                 min_diff = diff
                 best_match = mode
 
-        # Entscheidung treffen
-        detected_on = False
-        detected_speed = 0
-        detected_preset = None
-
-        # Fallback Logik wenn keine Kalibrierung
-        if self._power_profile[1] == 0:
-            threshold = self._power_profile["off"] + FALLBACK_THRESHOLD
+        # Fallback Logik wenn keine Kalibrierung vorhanden
+        if self._power_profile.get("fan_1", 0.0) == 0.0:
+            threshold = self._power_profile.get("off", 0.0) + FALLBACK_THRESHOLD
             if current_power > threshold:
-                best_match = 1
+                best_match = "fan_1"
             else:
                 best_match = "off"
 
-        # Auswerten
+        # Auswerten der ermittelten Zustände
+        detected_fan_on = False
+        detected_fan_speed = 0
+        detected_fan_preset = None
+        detected_light_on = False
+
         if best_match == "off":
-            detected_on = False
-        elif best_match == "boost":
-            detected_on = True
-            detected_preset = PRESET_BOOST
-            detected_speed = 3
-        else: # 1, 2, 3
-            detected_on = True
-            detected_speed = best_match
+            pass
+        elif best_match == "light_on":
+            detected_light_on = True
+        elif best_match == "fan_1":
+            detected_fan_on = True
+            detected_fan_speed = 1
+        elif best_match == "fan_1_light":
+            detected_fan_on = True
+            detected_fan_speed = 1
+            detected_light_on = True
+        elif best_match == "fan_2":
+            detected_fan_on = True
+            detected_fan_speed = 2
+        elif best_match == "fan_2_light":
+            detected_fan_on = True
+            detected_fan_speed = 2
+            detected_light_on = True
+        elif best_match == "fan_3":
+            detected_fan_on = True
+            detected_fan_speed = 3
+        elif best_match == "fan_3_light":
+            detected_fan_on = True
+            detected_fan_speed = 3
+            detected_light_on = True
+        elif best_match == "fan_boost":
+            detected_fan_on = True
+            detected_fan_speed = 3
+            detected_fan_preset = PRESET_BOOST
+        elif best_match == "fan_boost_light":
+            detected_fan_on = True
+            detected_fan_speed = 3
+            detected_fan_preset = PRESET_BOOST
+            detected_light_on = True
 
         # Spezialfall Nachlauf: Wenn Nachlauf aktiv, nicht auf "An" synchen
         if self._run_on_active:
-             if not detected_on:
+             if not detected_fan_on:
                  self._cancel_run_on_timer()
                  self._is_on = False
                  self.async_write_ha_state()
              return
 
         # Synchronisierung
-        if min_diff <= MATCH_TOLERANCE or (best_match == "off") or (self._power_profile[1] == 0):
-            if detected_on != self._is_on or (detected_on and (detected_speed != self._current_speed_step or detected_preset != self._preset_mode)):
-                _LOGGER.debug(f"Sync: Erkannt={best_match} ({current_power}W), Diff={min_diff:.1f}")
+        if min_diff <= MATCH_TOLERANCE or (best_match == "off") or (self._power_profile.get("fan_1", 0.0) == 0.0):
+            # Check if fan state needs update
+            fan_changed = (
+                detected_fan_on != self._is_on or
+                (detected_fan_on and (
+                    detected_fan_speed != self._current_speed_step or
+                    detected_fan_preset != self._preset_mode
+                ))
+            )
+            if fan_changed:
+                _LOGGER.debug(f"Sync Fan: Erkannt={best_match} ({current_power}W), Diff={min_diff:.1f}")
                 
-                self._is_on = detected_on
-                if not detected_on:
+                self._is_on = detected_fan_on
+                if not detected_fan_on:
                     self._percentage = 0
                     self._current_speed_step = 0
                     self._preset_mode = None
                 else:
-                    self._preset_mode = detected_preset
-                    if detected_preset == PRESET_BOOST:
+                    self._preset_mode = detected_fan_preset
+                    if detected_fan_preset == PRESET_BOOST:
                          self._percentage = 100
                          self._current_speed_step = 3
                     else:
-                        self._current_speed_step = detected_speed
-                        self._percentage = SPEED_MAPPING[detected_speed]
+                        self._current_speed_step = detected_fan_speed
+                        self._percentage = SPEED_MAPPING[detected_fan_speed]
 
                 self.async_write_ha_state()
+
+            # Sync Light
+            light_entity = self._runtime_data.light_entity
+            if light_entity is not None:
+                if detected_light_on != light_entity.is_on:
+                    _LOGGER.debug(f"Sync Light: Erkannt={best_match} ({current_power}W), Diff={min_diff:.1f}")
+                    light_entity.set_state_externally(detected_light_on)
 
     def _update_state_from_binary(self, is_running):
         """Einfaches Update für Binary Sensoren ohne Watt-Messung."""
@@ -273,6 +340,71 @@ class FaberFan(FanEntity):
                 self._preset_mode = None
             self.async_write_ha_state()
 
+    # --- COMMAND RETRY LOGIK ---
+
+    def _cancel_retry_check(self):
+        """Bricht einen geplanten Wiederholungstimer ab."""
+        if self._retry_check_cancel_fn:
+            self._retry_check_cancel_fn()
+            self._retry_check_cancel_fn = None
+
+    async def send_command_with_retry(self, command, retry_count=0):
+        """Sendet einen Befehl und prüft nach 2 Sekunden, ob sich die Leistung geändert hat."""
+        if not self._power_sensor or self._is_calibrating:
+            # Ohne Leistungssensor oder während der Kalibrierung direkt senden
+            await self._send_command_raw(command)
+            return
+
+        self._cancel_retry_check()
+
+        self._power_before_command = self._get_current_power()
+        self._pending_command = command
+        self._pending_command_retries = retry_count
+
+        _LOGGER.debug("Sende Befehl mit Retry-Logik (Versuch %d): %s. Leistung vorher: %.1fW", retry_count + 1, command, self._power_before_command)
+        await self._send_command_raw(command)
+
+        self._retry_check_cancel_fn = async_call_later(
+            self.hass, 2.0, self._async_check_power_change
+        )
+
+    async def _async_check_power_change(self, _now):
+        """Überprüft, ob sich die Leistung nach dem Befehl geändert hat. Wenn nicht, wird wiederholt."""
+        if self._is_calibrating:
+            return
+
+        current_power = self._get_current_power()
+        power_diff = abs(current_power - self._power_before_command)
+        
+        # 3.0W Toleranz (Licht hat ca. 7-10W, Lüfterstufen haben ähnliche/höhere Leistungssprünge)
+        if power_diff < 3.0:
+            if self._pending_command_retries < 2:  # Maximal 2 Wiederholungen (insgesamt 3 Versuche)
+                _LOGGER.warning(
+                    "Leistung hat sich nach Befehl nicht geändert (Vorher: %.1fW, Jetzt: %.1fW). Wiederhole Befehl %s (Versuch %d)...",
+                    self._power_before_command,
+                    current_power,
+                    self._pending_command,
+                    self._pending_command_retries + 2
+                )
+                await self.send_command_with_retry(
+                    self._pending_command,
+                    retry_count=self._pending_command_retries + 1
+                )
+            else:
+                _LOGGER.error(
+                    "Leistung hat sich nach 2 Wiederholungen für Befehl %s nicht geändert. Gebe auf.",
+                    self._pending_command
+                )
+                self._pending_command = None
+        else:
+            _LOGGER.debug(
+                "Befehl %s erfolgreich (Leistung geändert von %.1fW auf %.1fW).",
+                self._pending_command,
+                self._power_before_command,
+                current_power
+            )
+            self._pending_command = None
+
     # --- KALIBRIERUNG LOGIK ---
 
     async def async_start_calibration(self):
@@ -281,12 +413,12 @@ class FaberFan(FanEntity):
             _LOGGER.warning("Kalibrierung läuft bereits.")
             return
 
-        _LOGGER.info("Starte Faber Skypad Kalibrierung...")
+        _LOGGER.info("Starte Faber Skypad Kalibrierung... Bitte stellen Sie sicher, dass Lüfter und Licht ausgeschaltet sind.")
         self._is_calibrating = True
         self.async_write_ha_state()
 
-        # Start: Ausschalten um Baseline zu finden
-        await self._send_command_raw(CMD_TURN_ON_OFF)
+        # Step 0: Baseline (Alles aus) messen
+        # Da wir annehmen, dass alles aus ist, warten wir nur auf das Einpendeln
         self._calibration_step_cancel = async_call_later(self.hass, 6.0, self._calib_step_0_measure_off)
 
     async def _calib_step_0_measure_off(self, _now):
@@ -294,46 +426,113 @@ class FaberFan(FanEntity):
         self._power_profile["off"] = val
         _LOGGER.info(f"Kalibrierung: Baseline (Off) = {val} W")
         
-        await self._send_command_raw(CMD_TURN_ON_OFF)
-        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_1_measure)
+        # Licht einschalten
+        await self._send_command(CMD_LIGHT)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_1_measure_light_on)
 
-    async def _calib_step_1_measure(self, _now):
+    async def _calib_step_1_measure_light_on(self, _now):
         val = self._get_current_power()
-        self._power_profile[1] = val
-        _LOGGER.info(f"Kalibrierung: Stufe 1 = {val} W")
+        self._power_profile["light_on"] = val
+        _LOGGER.info(f"Kalibrierung: Licht An = {val} W")
+        
+        # Licht aus, Lüfter an (Stufe 1)
+        await self._send_command(CMD_LIGHT)
+        await self._send_command(CMD_TURN_ON_OFF)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_2_measure_fan_1)
 
-        await self._send_command_raw(CMD_INCREASE)
-        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_2_measure)
-
-    async def _calib_step_2_measure(self, _now):
+    async def _calib_step_2_measure_fan_1(self, _now):
         val = self._get_current_power()
-        self._power_profile[2] = val
-        _LOGGER.info(f"Kalibrierung: Stufe 2 = {val} W")
+        self._power_profile["fan_1"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Stufe 1 = {val} W")
+        
+        # Licht an
+        await self._send_command(CMD_LIGHT)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_3_measure_fan_1_light)
 
-        await self._send_command_raw(CMD_INCREASE)
-        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_3_measure)
-
-    async def _calib_step_3_measure(self, _now):
+    async def _calib_step_3_measure_fan_1_light(self, _now):
         val = self._get_current_power()
-        self._power_profile[3] = val
-        _LOGGER.info(f"Kalibrierung: Stufe 3 = {val} W")
+        self._power_profile["fan_1_light"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Stufe 1 + Licht = {val} W")
+        
+        # Licht aus, Lüfter auf Stufe 2 erhöhen
+        await self._send_command(CMD_LIGHT)
+        await self._send_command(CMD_INCREASE)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_4_measure_fan_2)
 
-        await self._send_command_raw(CMD_BOOST)
-        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_boost_measure)
-
-    async def _calib_step_boost_measure(self, _now):
+    async def _calib_step_4_measure_fan_2(self, _now):
         val = self._get_current_power()
-        self._power_profile["boost"] = val
-        _LOGGER.info(f"Kalibrierung: Boost = {val} W")
+        self._power_profile["fan_2"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Stufe 2 = {val} W")
+        
+        # Licht an
+        await self._send_command(CMD_LIGHT)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_5_measure_fan_2_light)
 
-        await self._send_command_raw(CMD_TURN_ON_OFF)
+    async def _calib_step_5_measure_fan_2_light(self, _now):
+        val = self._get_current_power()
+        self._power_profile["fan_2_light"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Stufe 2 + Licht = {val} W")
+        
+        # Licht aus, Lüfter auf Stufe 3 erhöhen
+        await self._send_command(CMD_LIGHT)
+        await self._send_command(CMD_INCREASE)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_6_measure_fan_3)
+
+    async def _calib_step_6_measure_fan_3(self, _now):
+        val = self._get_current_power()
+        self._power_profile["fan_3"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Stufe 3 = {val} W")
+        
+        # Licht an
+        await self._send_command(CMD_LIGHT)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_7_measure_fan_3_light)
+
+    async def _calib_step_7_measure_fan_3_light(self, _now):
+        val = self._get_current_power()
+        self._power_profile["fan_3_light"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Stufe 3 + Licht = {val} W")
+        
+        # Licht aus, Boost aktivieren
+        await self._send_command(CMD_LIGHT)
+        await self._send_command(CMD_BOOST)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_8_measure_fan_boost)
+
+    async def _calib_step_8_measure_fan_boost(self, _now):
+        val = self._get_current_power()
+        self._power_profile["fan_boost"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Boost = {val} W")
+        
+        # Licht an
+        await self._send_command(CMD_LIGHT)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_9_measure_fan_boost_light)
+
+    async def _calib_step_9_measure_fan_boost_light(self, _now):
+        val = self._get_current_power()
+        self._power_profile["fan_boost_light"] = val
+        _LOGGER.info(f"Kalibrierung: Lüfter Boost + Licht = {val} W")
+        
+        # Licht aus, Lüfter aus
+        await self._send_command(CMD_LIGHT)
+        await self._send_command(CMD_TURN_ON_OFF)
         
         self._is_calibrating = False
         self._is_on = False
         self._percentage = 0
         self._preset_mode = None
+        self._current_speed_step = 0
+        
+        # In ConfigEntry persistieren
+        new_data = {**self._config_entry.data, "power_profile": self._power_profile}
+        self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
+        
         self.async_write_ha_state()
-        _LOGGER.info("Kalibrierung abgeschlossen. Werte gespeichert.")
+        
+        # Licht auf aus synchronisieren
+        light_entity = self._runtime_data.light_entity
+        if light_entity is not None:
+            light_entity.set_state_externally(False)
+
+        _LOGGER.info("Kalibrierung erfolgreich abgeschlossen und dauerhaft gespeichert.")
 
     def _get_current_power(self):
         if not self._power_sensor: return 0.0
@@ -361,7 +560,7 @@ class FaberFan(FanEntity):
     # --- NORMALE STEUERUNG ---
 
     async def _send_command(self, command):
-        await self._send_command_raw(command)
+        await self.send_command_with_retry(command)
         await asyncio.sleep(DEFAULT_DELAY)
 
     def _cancel_run_on_timer(self):

@@ -26,6 +26,9 @@ class FaberRuntimeData:
         self.run_on_active = False
         self.run_on_finish_time = None
         self.fan_entity = None
+        self.light_entity = None
+        self.config_entry = None
+        self.config = None
         self._listeners = []
 
     def register_listener(self, callback_func):
@@ -48,10 +51,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     _LOGGER.debug("Setup Faber Skypad Entry: %s", entry.entry_id)
 
+    runtime_data = FaberRuntimeData()
+    runtime_data.config_entry = entry
+    runtime_data.config = entry.data
+
     # Runtime Data initialisieren
     hass.data[DOMAIN][entry.entry_id] = {
         "config": entry.data,
-        "runtime_data": FaberRuntimeData()
+        "runtime_data": runtime_data
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

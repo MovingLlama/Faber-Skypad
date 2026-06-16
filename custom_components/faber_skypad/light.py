@@ -29,19 +29,23 @@ async def async_setup_entry(
     """Fügt die Light Entität hinzu."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     config = data["config"]
+    runtime_data = data["runtime_data"]
     
     remote_entity = config[CONF_REMOTE_ENTITY]
     name = config.get("name", "Faber Skypad")
 
-    async_add_entities([FaberLight(name, remote_entity, config_entry.entry_id)])
+    light = FaberLight(name, remote_entity, config_entry.entry_id, runtime_data)
+    runtime_data.light_entity = light
+    async_add_entities([light])
 
 class FaberLight(LightEntity):
     """Repräsentation des Faber Skypad Lichts."""
 
-    def __init__(self, name, remote_entity, entry_id):
+    def __init__(self, name, remote_entity, entry_id, runtime_data):
         self._name = name
         self._remote_entity = remote_entity
         self._entry_id = entry_id
+        self._runtime_data = runtime_data
         self._is_on = False
 
     @property
@@ -74,27 +78,35 @@ class FaberLight(LightEntity):
     def supported_color_modes(self):
         return {ColorMode.ONOFF}
     
+    def set_state_externally(self, is_on: bool) -> None:
+        """Setzt den Status von einer externen Quelle (z.B. Leistungssensor-Update)."""
+        if self._is_on != is_on:
+            self._is_on = is_on
+            self.async_write_ha_state()
+    
     async def _send_command(self, command):
         """Sendet einen Befehl an die Remote."""
         if not command:
             _LOGGER.warning("Kein Befehl für Licht konfiguriert (CMD_LIGHT ist leer).")
             return
 
-        cmd_formatted = command if command.startswith("b64:") else f"b64:{command}"
-        
-        _LOGGER.debug("Sende Licht-Befehl an %s: %s (Hold: %ss)", self._remote_entity, cmd_formatted, CMD_HOLD_SECS)
-
-        await self.hass.services.async_call(
-            "remote",
-            "send_command",
-            {
-                "entity_id": self._remote_entity,
-                "command": [cmd_formatted],
-                "hold_secs": CMD_HOLD_SECS,
-            },
-            blocking=True
-        )
-        await asyncio.sleep(DEFAULT_DELAY)
+        # Verwende Fan retry logic falls vorhanden
+        if self._runtime_data.fan_entity:
+            await self._runtime_data.fan_entity.send_command_with_retry(command)
+        else:
+            cmd_formatted = command if command.startswith("b64:") else f"b64:{command}"
+            _LOGGER.debug("Sende Licht-Befehl direkt an %s: %s (Hold: %ss)", self._remote_entity, cmd_formatted, CMD_HOLD_SECS)
+            await self.hass.services.async_call(
+                "remote",
+                "send_command",
+                {
+                    "entity_id": self._remote_entity,
+                    "command": [cmd_formatted],
+                    "hold_secs": CMD_HOLD_SECS,
+                },
+                blocking=True
+            )
+            await asyncio.sleep(DEFAULT_DELAY)
 
     async def async_turn_on(self, **kwargs):
         """Einschalten."""
