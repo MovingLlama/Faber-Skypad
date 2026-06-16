@@ -78,6 +78,7 @@ class FaberFan(FanEntity):
         
         # Kalibrierungs-Daten
         self._is_calibrating = False
+        self._calibration_step = 0
         self._calibration_step_cancel = None
         self._power_profile = self._config_entry.data.get("power_profile", {
             "off": 0.0,
@@ -420,11 +421,47 @@ class FaberFan(FanEntity):
 
         _LOGGER.info("Starte Faber Skypad Kalibrierung... Bitte stellen Sie sicher, dass Lüfter und Licht ausgeschaltet sind.")
         self._is_calibrating = True
+        self._calibration_step = 0
+        self._runtime_data.trigger_update()
         self.async_write_ha_state()
 
         # Step 0: Baseline (Alles aus) messen
         # Da wir annehmen, dass alles aus ist, warten wir nur auf das Einpendeln
         self._calibration_step_cancel = async_call_later(self.hass, 6.0, self._calib_step_0_measure_off)
+
+    async def async_cancel_calibration(self):
+        """Bricht den Kalibrierungsprozess vorzeitig ab und schaltet alles aus."""
+        if not self._is_calibrating:
+            return
+        _LOGGER.info("Kalibrierung manuell abgebrochen.")
+        
+        # Abbrechen aller ausstehenden Timer
+        if self._calibration_step_cancel:
+            self._calibration_step_cancel()
+            self._calibration_step_cancel = None
+            
+        # Ermittle den aktuellen Zustand anhand des Schritts und schalte gezielt aus
+        # Licht ausschalten, falls es an war (Schritte: 1, 3, 5, 7, 9)
+        if self._calibration_step in (1, 3, 5, 7, 9):
+            await self._send_command_raw(CMD_LIGHT)
+            
+        # Lüfter ausschalten, falls er an war (Schritte: 2, 3, 4, 5, 6, 7, 8, 9)
+        if self._calibration_step in (2, 3, 4, 5, 6, 7, 8, 9):
+            await self._send_command_raw(CMD_TURN_ON_OFF)
+            
+        self._is_calibrating = False
+        self._is_on = False
+        self._percentage = 0
+        self._preset_mode = None
+        self._current_speed_step = 0
+        self._calibration_step = 0
+        
+        self._runtime_data.trigger_update()
+        self.async_write_ha_state()
+        
+        light_entity = self._runtime_data.light_entity
+        if light_entity is not None:
+            light_entity.set_state_externally(False)
 
     async def _calib_step_0_measure_off(self, _now):
         val = self._get_current_power()
@@ -432,6 +469,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Baseline (Off) = {val} W")
         
         # Licht einschalten
+        self._calibration_step = 1
         await self._send_command(CMD_LIGHT)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_1_measure_light_on)
 
@@ -441,6 +479,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Licht An = {val} W")
         
         # Licht aus, Lüfter an (Stufe 1)
+        self._calibration_step = 2
         await self._send_command(CMD_LIGHT)
         await self._send_command(CMD_TURN_ON_OFF)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_2_measure_fan_1)
@@ -451,6 +490,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Stufe 1 = {val} W")
         
         # Licht an
+        self._calibration_step = 3
         await self._send_command(CMD_LIGHT)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_3_measure_fan_1_light)
 
@@ -460,6 +500,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Stufe 1 + Licht = {val} W")
         
         # Licht aus, Lüfter auf Stufe 2 erhöhen
+        self._calibration_step = 4
         await self._send_command(CMD_LIGHT)
         await self._send_command(CMD_INCREASE)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_4_measure_fan_2)
@@ -470,6 +511,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Stufe 2 = {val} W")
         
         # Licht an
+        self._calibration_step = 5
         await self._send_command(CMD_LIGHT)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_5_measure_fan_2_light)
 
@@ -479,6 +521,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Stufe 2 + Licht = {val} W")
         
         # Licht aus, Lüfter auf Stufe 3 erhöhen
+        self._calibration_step = 6
         await self._send_command(CMD_LIGHT)
         await self._send_command(CMD_INCREASE)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_6_measure_fan_3)
@@ -489,6 +532,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Stufe 3 = {val} W")
         
         # Licht an
+        self._calibration_step = 7
         await self._send_command(CMD_LIGHT)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_7_measure_fan_3_light)
 
@@ -498,6 +542,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Stufe 3 + Licht = {val} W")
         
         # Licht aus, Boost aktivieren
+        self._calibration_step = 8
         await self._send_command(CMD_LIGHT)
         await self._send_command(CMD_BOOST)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_8_measure_fan_boost)
@@ -508,6 +553,7 @@ class FaberFan(FanEntity):
         _LOGGER.info(f"Kalibrierung: Lüfter Boost = {val} W")
         
         # Licht an
+        self._calibration_step = 9
         await self._send_command(CMD_LIGHT)
         self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_9_measure_fan_boost_light)
 
@@ -525,6 +571,7 @@ class FaberFan(FanEntity):
         self._percentage = 0
         self._preset_mode = None
         self._current_speed_step = 0
+        self._calibration_step = 0
         
         # In ConfigEntry persistieren
         new_data = {
@@ -534,6 +581,7 @@ class FaberFan(FanEntity):
         }
         self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
         
+        self._runtime_data.trigger_update()
         self.async_write_ha_state()
         
         # Licht auf aus synchronisieren

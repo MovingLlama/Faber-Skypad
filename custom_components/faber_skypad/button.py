@@ -1,4 +1,4 @@
-"""Button platform for Faber Skypad (Calibration & Status Correction)."""
+"""Button platform for Faber Skypad (Status Correction)."""
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -26,7 +26,6 @@ async def async_setup_entry(
     remote_entity = config[CONF_REMOTE_ENTITY]
 
     async_add_entities([
-        FaberCalibrationButton(name, config_entry.entry_id, remote_entity, runtime_data),
         FaberSyncFanButton(name, config_entry.entry_id, remote_entity, runtime_data),
         FaberSyncLightButton(name, config_entry.entry_id, remote_entity, runtime_data)
     ])
@@ -65,21 +64,6 @@ class FaberBaseButton(ButtonEntity):
                 "hold_secs": CMD_HOLD_SECS,
             },
         )
-
-class FaberCalibrationButton(FaberBaseButton):
-    """Button to start the calibration process."""
-    
-    _attr_translation_key = "start_calibration"
-
-    def __init__(self, name, entry_id, remote_entity, runtime_data):
-        super().__init__(name, entry_id, remote_entity, runtime_data)
-        self._attr_unique_id = f"{entry_id}_calibration_button"
-        self._attr_icon = "mdi:auto-fix"
-
-    async def async_press(self) -> None:
-        """Executes the calibration process."""
-        if self._runtime_data.fan_entity:
-            await self._runtime_data.fan_entity.async_start_calibration()
 
 class FaberSyncFanButton(FaberBaseButton):
     """Button to manually synchronize the fan state (command only)."""
