@@ -448,7 +448,7 @@ class FaberFan(FanEntity):
 
         # Step 0: Baseline (Alles aus) messen
         # Da wir annehmen, dass alles aus ist, warten wir nur auf das Einpendeln
-        self._calibration_step_cancel = async_call_later(self.hass, 6.0, self._calib_step_0_measure_off)
+        self._calibration_step_cancel = async_call_later(self.hass, CALIBRATION_WAIT_TIME, self._calib_step_0_measure_off)
 
     async def async_cancel_calibration(self):
         """Bricht den Kalibrierungsprozess vorzeitig ab und schaltet alles aus."""
