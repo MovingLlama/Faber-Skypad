@@ -175,15 +175,6 @@ class FaberFan(FanEntity):
                     self.hass, [self._power_sensor], self._async_power_sensor_changed
                 )
             )
-            # Versuche existierende Werte zu laden (Fallback)
-            state = self.hass.states.get(self._power_sensor)
-            if state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                try:
-                    # Nur zuweisen, wenn noch kein "off" gelernt wurde
-                    if self._power_profile.get("off", 0.0) == 0.0:
-                        self._power_profile["off"] = float(state.state)
-                except ValueError:
-                    pass
 
     # --- POWER SENSOR LOGIK ---
 
