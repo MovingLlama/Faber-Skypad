@@ -24,6 +24,7 @@ from .const import (
     CMD_INCREASE,
     CMD_DECREASE,
     CMD_BOOST,
+    CMD_LIGHT,
     DEFAULT_DELAY,
     CMD_HOLD_SECS,
     SPEED_MAPPING,
