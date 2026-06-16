@@ -222,16 +222,25 @@ class FaberFan(FanEntity):
 
         if not is_calibrated:
             # Fallback Logik wenn keine Kalibrierung vorhanden
-            threshold = self._power_profile.get("off", 0.0) + FALLBACK_THRESHOLD
-            if current_power > threshold:
+            p_off = self._power_profile.get("off", 0.0)
+            if current_power > p_off + FALLBACK_THRESHOLD:
                 best_match = "fan_1"
+                detected_fan_on = True
+                detected_fan_speed = 1
+                detected_fan_preset = None
+                detected_light_on = False
+            elif current_power >= p_off + 6.0:
+                best_match = "light_on"
+                detected_fan_on = False
+                detected_fan_speed = 0
+                detected_fan_preset = None
+                detected_light_on = True
             else:
                 best_match = "off"
-            
-            detected_fan_on = (best_match == "fan_1")
-            detected_fan_speed = 1 if detected_fan_on else 0
-            detected_fan_preset = None
-            detected_light_on = False
+                detected_fan_on = False
+                detected_fan_speed = 0
+                detected_fan_preset = None
+                detected_light_on = False
         else:
             # Kalibrierte Logik mit Hysterese für Licht
             speed_steps = {
@@ -295,7 +304,9 @@ class FaberFan(FanEntity):
                 best_match = "light_on"
 
             # Berechne min_diff zum erwarteten Wert des gematchten Status
-            matched_watt = self._power_profile.get(best_match, w_light if detected_light_on else w_base)
+            matched_watt = self._power_profile.get(best_match, 0.0)
+            if matched_watt == 0.0:
+                matched_watt = w_light if detected_light_on else w_base
             min_diff = abs(current_power - matched_watt)
 
         # Spezialfall Nachlauf: Wenn Nachlauf aktiv, nicht auf "An" synchen
@@ -394,8 +405,8 @@ class FaberFan(FanEntity):
         )
         await self._send_command_raw(command)
 
-        # Erster Retry nach 2 Sekunden, danach alle 5 Sekunden (endlos bis Erfolg)
-        delay = 2.0 if retry_count == 0 else 5.0
+        # Erster Retry nach 10 Sekunden, danach alle 10 Sekunden (endlos bis Erfolg)
+        delay = 10.0
 
         self._retry_check_cancel_fn = async_call_later(
             self.hass, delay, self._async_check_power_change
