@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Faber Skypad Logo" width="150" height="150">
+  <img src="https://raw.githubusercontent.com/MovingLlama/Faber-Skypad/main/logo.png" alt="Faber Skypad Logo" width="150" height="150">
 </p>
 
 # **Faber Skypad Integration for Home Assistant**
