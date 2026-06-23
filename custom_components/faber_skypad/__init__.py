@@ -78,3 +78,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Lädt die Integration neu, wenn sich Optionen ändern."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old entry to version 2 (resets calibration/power profiles)."""
+    _LOGGER.info("Migrating configuration entry from version %s", config_entry.version)
+
+    if config_entry.version == 1:
+        new_data = {**config_entry.data}
+        
+        # Reset calibration and power profile
+        if "power_profile" in new_data:
+            del new_data["power_profile"]
+        if "last_calibration" in new_data:
+            del new_data["last_calibration"]
+
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
+        _LOGGER.info("Migration to version 2 successful (calibration reset)")
+
+    return True

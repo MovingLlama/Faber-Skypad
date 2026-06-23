@@ -13,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 class FaberConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handles the configuration flow (initial setup)."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(self, user_input=None):
         """The first step when adding the integration."""

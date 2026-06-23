@@ -27,7 +27,8 @@ async def async_setup_entry(
 
     async_add_entities([
         FaberSyncFanButton(name, config_entry.entry_id, remote_entity, runtime_data),
-        FaberSyncLightButton(name, config_entry.entry_id, remote_entity, runtime_data)
+        FaberSyncLightButton(name, config_entry.entry_id, remote_entity, runtime_data),
+        FaberResetCalibrationButton(name, config_entry.entry_id, remote_entity, runtime_data)
     ])
 
 class FaberBaseButton(ButtonEntity):
@@ -90,3 +91,38 @@ class FaberSyncLightButton(FaberBaseButton):
     async def async_press(self) -> None:
         """Sends the light command without changing the state."""
         await self._send_raw_command(CMD_LIGHT)
+
+
+class FaberResetCalibrationButton(FaberBaseButton):
+    """Button to reset the calibration data."""
+
+    def __init__(self, name, entry_id, remote_entity, runtime_data):
+        super().__init__(name, entry_id, remote_entity, runtime_data)
+        self._attr_name = "Reset Calibration"
+        self._attr_unique_id = f"{entry_id}_reset_calibration_button"
+        self._attr_icon = "mdi:restore"
+
+    async def async_press(self) -> None:
+        """Resets the power profile and last calibration in config entry."""
+        if self._runtime_data.fan_entity:
+            self._runtime_data.fan_entity._power_profile = {
+                "off": 0.0,
+                "light_on": 0.0,
+                "fan_1": 0.0,
+                "fan_2": 0.0,
+                "fan_3": 0.0,
+                "fan_boost": 0.0,
+            }
+        
+        # Update config entry data
+        new_data = {**self._runtime_data.config_entry.data}
+        if "power_profile" in new_data:
+            del new_data["power_profile"]
+        if "last_calibration" in new_data:
+            del new_data["last_calibration"]
+            
+        self.hass.config_entries.async_update_entry(
+            self._runtime_data.config_entry, data=new_data
+        )
+        
+        self._runtime_data.trigger_update()
