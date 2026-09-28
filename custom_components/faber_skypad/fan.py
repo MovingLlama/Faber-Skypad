@@ -35,6 +35,7 @@ from .const import (
     MATCH_TOLERANCE,
     MIN_MATCH_TOLERANCE,
     FALLBACK_THRESHOLD,
+    CMD_MAX_RETRIES,
     CALIB_MIN_CHANGE,
     CALIB_CHANGE_TIMEOUT,
     CALIB_MAX_ATTEMPTS,
@@ -458,7 +459,17 @@ class FaberFan(FanEntity):
         # Bei der ersten Ausführung (retry_count == 0) Leistung aufzeichnen
         if retry_count == 0:
             self._cancel_retry_check()
-            self._power_before_command = self._get_current_power()
+            self._pending_command = None
+            power = self._read_power()
+            if power is None:
+                # Ohne gültigen Messwert würde jeder Retry das Gerät erneut umschalten
+                _LOGGER.warning(
+                    "Leistungssensor %s liefert keinen Wert, sende Befehl ohne Wiederholung.",
+                    self._power_sensor
+                )
+                await self._send_command_raw(command)
+                return
+            self._power_before_command = power
             self._pending_command = command
 
         self._pending_command_retries = retry_count
@@ -471,7 +482,7 @@ class FaberFan(FanEntity):
         )
         await self._send_command_raw(command)
 
-        # Erster Retry nach 10 Sekunden, danach alle 10 Sekunden (endlos bis Erfolg)
+        # Prüfung nach 10 Sekunden, höchstens CMD_MAX_RETRIES Wiederholungen
         delay = 10.0
 
         self._retry_check_cancel_fn = async_call_later(
@@ -483,11 +494,23 @@ class FaberFan(FanEntity):
         if self._is_calibrating or not self._pending_command:
             return
 
-        current_power = self._get_current_power()
+        current_power = self._read_power()
+        if current_power is None:
+            _LOGGER.warning("Leistungssensor liefert keinen Wert, keine Wiederholung von %s.", self._pending_command)
+            self._pending_command = None
+            return
         power_diff = abs(current_power - self._power_before_command)
 
         # 3.0W Toleranz
-        if power_diff < 3.0:
+        if power_diff < 3.0 and self._pending_command_retries >= CMD_MAX_RETRIES:
+            _LOGGER.warning(
+                "Befehl %s nach %d Versuchen ohne Leistungsänderung (%.1fW), gebe auf.",
+                self._pending_command,
+                self._pending_command_retries + 1,
+                current_power
+            )
+            self._pending_command = None
+        elif power_diff < 3.0:
             _LOGGER.warning(
                 "Leistung hat sich nach Befehl nicht geändert (Vorher: %.1fW, Jetzt: %.1fW). Wiederhole Befehl %s (Versuch %d)...",
                 self._power_before_command,
@@ -518,6 +541,17 @@ class FaberFan(FanEntity):
             return
         if not self._power_sensor:
             _LOGGER.warning("Kalibrierung benötigt einen Leistungssensor.")
+            return
+        if self._read_power() is None:
+            _LOGGER.error("Kalibrierung nicht gestartet: Leistungssensor %s liefert keinen Wert.", self._power_sensor)
+            persistent_notification.async_create(
+                self.hass,
+                f"Die Kalibrierung wurde nicht gestartet: Der Leistungssensor `{self._power_sensor}` "
+                "existiert nicht oder liefert keinen Wert. Bitte unter „Konfigurieren“ den richtigen Sensor wählen.",
+                title=f"{self._name}: Kalibrierung",
+                notification_id=f"{DOMAIN}_{self._entry_id}_calibration",
+            )
+            self._runtime_data.trigger_update()
             return
 
         _LOGGER.info("Starte Faber Skypad Kalibrierung.")

@@ -10,6 +10,7 @@ CONF_POWER_SENSOR = "power_sensor"
 DEFAULT_RUN_ON_SECONDS = 60
 DEFAULT_DELAY = 0.75
 CMD_HOLD_SECS = 0.4
+CMD_MAX_RETRIES = 3            # Wiederholungen, wenn sich die Leistung nach einem Befehl nicht ändert
 
 # Commands - Base64 Codes
 CMD_TURN_ON_OFF = "JgAUABgYFy0vFxgXFi4vQxgsGBcvAA0F"
@@ -32,7 +33,7 @@ FALLBACK_THRESHOLD = 15.0
 
 # Kalibrierung: jeder Befehl wird über den Leistungssensor bestätigt
 CALIB_MIN_CHANGE = 3.0         # Mindeständerung (W), die einen Befehl bestätigt
-CALIB_CHANGE_TIMEOUT = 10.0    # Wartezeit (s) auf die Leistungsänderung pro Versuch
+CALIB_CHANGE_TIMEOUT = 15.0   # Wartezeit (s) auf die Leistungsänderung pro Versuch
 CALIB_MAX_ATTEMPTS = 3         # Versuche pro Befehl, danach Abbruch
 CALIB_STABLE_WINDOW = 8.0      # Zeitfenster (s), in dem die Leistung stabil sein muss
 CALIB_STABLE_BAND = 2.0        # Maximale Schwankung (W) innerhalb des Fensters
