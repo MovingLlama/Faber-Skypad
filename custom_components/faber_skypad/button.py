@@ -55,6 +55,10 @@ class FaberBaseButton(ButtonEntity):
         """Sends a command to the remote without changing the internal state."""
         if not command:
             return
+        fan = self._runtime_data.fan_entity
+        if fan and fan._is_calibrating:
+            # Commands would corrupt the running calibration
+            return
         cmd_formatted = command if command.startswith("b64:") else f"b64:{command}"
         await self.hass.services.async_call(
             "remote",

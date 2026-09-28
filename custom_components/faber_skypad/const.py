@@ -26,6 +26,20 @@ SPEED_MAPPING = {
 }
 
 PRESET_BOOST = "BOOST"
-CALIBRATION_WAIT_TIME = 30.0
-MATCH_TOLERANCE = 15.0
+MATCH_TOLERANCE = 15.0         # Obergrenze der Matching-Toleranz (W)
+MIN_MATCH_TOLERANCE = 2.0      # Untergrenze der Matching-Toleranz (W)
 FALLBACK_THRESHOLD = 15.0
+
+# Kalibrierung: jeder Befehl wird über den Leistungssensor bestätigt
+CALIB_MIN_CHANGE = 3.0         # Mindeständerung (W), die einen Befehl bestätigt
+CALIB_CHANGE_TIMEOUT = 10.0    # Wartezeit (s) auf die Leistungsänderung pro Versuch
+CALIB_MAX_ATTEMPTS = 3         # Versuche pro Befehl, danach Abbruch
+CALIB_STABLE_WINDOW = 8.0      # Zeitfenster (s), in dem die Leistung stabil sein muss
+CALIB_STABLE_BAND = 2.0        # Maximale Schwankung (W) innerhalb des Fensters
+CALIB_STABLE_TIMEOUT = 45.0    # Maximale Wartezeit (s) auf einen stabilen Wert
+CALIB_COMMAND_GAP = 2.0        # Mindestabstand (s) zwischen zwei Befehlen
+CALIB_POLL_INTERVAL = 0.5      # Abtastintervall (s) des Leistungssensors
+
+# Zustandserkennung im Normalbetrieb
+DETECTION_SETTLE_TIME = 4.0    # Erkannter Zustand muss so lange (s) anliegen
+COMMAND_SETTLE_TIME = 8.0      # Nach eigenen Befehlen (s) keine Übernahme

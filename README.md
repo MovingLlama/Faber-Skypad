@@ -53,17 +53,19 @@ Both entities can be changed later via **Configure** on the integration; the pow
 
 To let Home Assistant know exactly which speed the hood is running at (e.g., if it was operated manually), you can run the calibration process.
 
-1.  Make sure both the hood and the light are **off**.
+1.  The hood and light can be in any state – the calibration switches both off by itself first.
 2.  In Home Assistant, turn on the **"Calibration"** switch.
-3.  **Important:** Avoid operating the hood during calibration (approx. 3 minutes, as each step waits 30 seconds for stable power readings)!
+3.  **Important:** Avoid operating the hood during calibration (approx. 2–4 minutes)! Light, fan and sync buttons are blocked while it runs.
 4.  The process:
-    *   Measures "Off" consumption (baseline).
+    *   Toggles fan and light once and uses the power change to find out whether they were on, then switches both off -> Measures "Off" consumption (baseline).
     *   Turns on the Light -> Measures light baseline.
     *   Turns off the Light, turns on Fan Speed 1 -> Measures.
     *   Turns on Fan Speed 2 -> Measures.
     *   Turns on Fan Speed 3 -> Measures.
     *   Turns on Boost -> Measures.
     *   Turns off.
+
+    Every command is confirmed via the power sensor and resent up to 3 times if nothing changes. Each value is the median of a stable reading window. If a command can't be confirmed or the values are implausible (each level must be clearly above the previous one), the calibration is aborted, the hood is switched off and the previous profile is kept – you'll get a notification in Home Assistant. Turning the switch off cancels the calibration and switches the hood off.
 5.  Afterward, the learned values are saved in the config entry and used for detection.
 
 ## **Entities**

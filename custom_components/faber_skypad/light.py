@@ -108,8 +108,15 @@ class FaberLight(LightEntity):
             )
             await asyncio.sleep(DEFAULT_DELAY)
 
+    def _is_calibrating(self) -> bool:
+        fan = self._runtime_data.fan_entity
+        return bool(fan and fan._is_calibrating)
+
     async def async_turn_on(self, **kwargs):
         """Einschalten."""
+        if self._is_calibrating():
+            _LOGGER.warning("Kalibrierung läuft, Licht-Befehl wird ignoriert.")
+            return
         if not self._is_on:
             await self._send_command(CMD_LIGHT)
             self._is_on = True
@@ -117,6 +124,9 @@ class FaberLight(LightEntity):
 
     async def async_turn_off(self, **kwargs):
         """Ausschalten."""
+        if self._is_calibrating():
+            _LOGGER.warning("Kalibrierung läuft, Licht-Befehl wird ignoriert.")
+            return
         if self._is_on:
             await self._send_command(CMD_LIGHT)
             self._is_on = False
