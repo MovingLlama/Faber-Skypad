@@ -41,37 +41,44 @@ class FaberConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Defines the options flow handler for later changes."""
-        return FaberOptionsFlowHandler(config_entry)
+        return FaberOptionsFlowHandler()
 
 
 class FaberOptionsFlowHandler(config_entries.OptionsFlow):
     """Handles the options (subsequent configuration via 'Configure')."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        """Initializes the options flow."""
-        self.config_entry = config_entry
-
     async def async_step_init(self, user_input=None):
         """Shows the form with the current values."""
         if user_input is not None:
-            # The user_input contains the new options. We create an entry with this
-            # data, and HA will store it in config_entry.options and reload the integration.
-            return self.async_create_entry(title="", data=user_input)
+            # The platforms read their settings from config_entry.data, so the new
+            # values are written there. Leftover options from older versions are
+            # cleared; the data update triggers the reload of the integration.
+            new_data = {**self.config_entry.data, **self.config_entry.options}
+            new_data[CONF_REMOTE_ENTITY] = user_input[CONF_REMOTE_ENTITY]
+            if user_input.get(CONF_POWER_SENSOR):
+                new_data[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
+            else:
+                new_data.pop(CONF_POWER_SENSOR, None)
 
-        # When building the form, we show the current options, falling back to the
-        # initial data if no options have been set yet.
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data, options={}
+            )
+            return self.async_create_entry(title="", data={})
+
+        # Show the current values, including options saved by older versions.
         combined_config = {**self.config_entry.data, **self.config_entry.options}
 
+        # suggested_value instead of default, so the optional power sensor can be cleared
         schema = vol.Schema({
             vol.Required(
                 CONF_REMOTE_ENTITY,
-                default=combined_config.get(CONF_REMOTE_ENTITY)
+                description={"suggested_value": combined_config.get(CONF_REMOTE_ENTITY)},
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="remote")
             ),
             vol.Optional(
                 CONF_POWER_SENSOR,
-                default=combined_config.get(CONF_POWER_SENSOR)
+                description={"suggested_value": combined_config.get(CONF_POWER_SENSOR)},
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
             ),

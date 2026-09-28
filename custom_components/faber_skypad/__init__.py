@@ -51,13 +51,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     _LOGGER.debug("Setup Faber Skypad Entry: %s", entry.entry_id)
 
+    # Optionen aus älteren Versionen überschreiben die Setup-Daten
+    config = {**entry.data, **entry.options}
+
     runtime_data = FaberRuntimeData()
     runtime_data.config_entry = entry
-    runtime_data.config = entry.data
+    runtime_data.config = config
 
     # Runtime Data initialisieren
     hass.data[DOMAIN][entry.entry_id] = {
-        "config": entry.data,
+        "config": config,
         "runtime_data": runtime_data
     }
 

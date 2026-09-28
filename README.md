@@ -38,14 +38,16 @@ Go to **Settings -> Devices & Services -> Add Integration** and search for **Fab
 
 ### **Required Entities**
 
-*   **Remote Entity:** A `remote.*` entity (e.g., Broadlink, Harmony) that sends the commands.
-    *   The commands must be base64 encoded or stored as names in the remote entity.
-    *   Expected commands: `TURN_ON_OFF`, `INCREASE`, `DECREASE`, `BOOST`, `LIGHT`.
+*   **Remote Entity:** A `remote.*` entity that sends the IR commands (e.g., Broadlink).
+    *   The IR codes for the Faber Skypad (`TURN_ON_OFF`, `INCREASE`, `DECREASE`, `BOOST`, `LIGHT`) are built into the integration and sent as raw Base64 codes (`b64:...` via `remote.send_command`). No commands need to be learned or stored in the remote.
+    *   The remote integration must therefore support sending `b64:` codes (e.g., Broadlink).
 
 ### **Optional Entities**
 
 *   **Power Sensor:** A sensor that measures the current power consumption in Watts (e.g., Shelly Plug S, Shelly 1PM).
     *   *Alternatively:* A binary sensor (On/Off) if power measurement is not possible (limited functionality).
+
+Both entities can be changed later via **Configure** on the integration; the power sensor can also be removed there.
 
 ## **Calibration**
 
@@ -80,6 +82,7 @@ After setup, the following entities are available:
 | `sensor.faber_skypad_last_calibration` | Sensor | Shows the timestamp and learned values of the last calibration. |
 | `button.faber_skypad_sync_fan` | Button | Sends the fan command (without changing HA state, for manual sync). |
 | `button.faber_skypad_sync_light` | Button | Sends the light command (without changing HA state, for manual sync). |
+| `button.faber_skypad_reset_calibration` | Button | Deletes the learned power values and the last calibration timestamp. |
 
 ## **Notes**
 
