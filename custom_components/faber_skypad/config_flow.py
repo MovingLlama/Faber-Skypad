@@ -5,7 +5,14 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
-from .const import DOMAIN, CONF_REMOTE_ENTITY, CONF_POWER_SENSOR
+from .const import (
+    DOMAIN,
+    CONF_REMOTE_ENTITY,
+    CONF_POWER_SENSOR,
+    CONF_SYNC_DELAY,
+    COMMAND_SETTLE_TIME,
+    SYNC_DELAY_MAX,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +66,7 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
                 new_data[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
             else:
                 new_data.pop(CONF_POWER_SENSOR, None)
+            new_data[CONF_SYNC_DELAY] = user_input.get(CONF_SYNC_DELAY, COMMAND_SETTLE_TIME)
 
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data, options={}
@@ -81,6 +89,19 @@ class FaberOptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": combined_config.get(CONF_POWER_SENSOR)},
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+            ),
+            # Time after own commands before the power sensor may correct the state
+            vol.Optional(
+                CONF_SYNC_DELAY,
+                default=combined_config.get(CONF_SYNC_DELAY, COMMAND_SETTLE_TIME),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=SYNC_DELAY_MAX,
+                    step=1,
+                    unit_of_measurement="s",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
             ),
         })
 

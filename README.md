@@ -49,6 +49,8 @@ Go to **Settings -> Devices & Services -> Add Integration** and search for **Fab
 
 Both entities can be changed later via **Configure** on the integration; the power sensor can also be removed there.
 
+**Sync delay after commands** (Configure, default 8 s): after sending a command, the power sensor may not correct the fan/light state for this many seconds, and failed commands are only retried after this time (at least 10 s). Increase it if your power sensor reports slowly and the state briefly jumps back after switching the light or fan.
+
 ## **Calibration**
 
 To let Home Assistant know exactly which speed the hood is running at (e.g., if it was operated manually), you can run the calibration process.

@@ -5,6 +5,7 @@ DOMAIN = "faber_skypad"
 # Konfigurations-Schlüssel
 CONF_REMOTE_ENTITY = "remote_entity"
 CONF_POWER_SENSOR = "power_sensor"
+CONF_SYNC_DELAY = "sync_delay"   # Sperrzeit (s) der Zustandserkennung nach eigenen Befehlen
 
 # Standardwerte
 DEFAULT_RUN_ON_SECONDS = 60
@@ -43,4 +44,6 @@ CALIB_POLL_INTERVAL = 0.5      # Abtastintervall (s) des Leistungssensors
 
 # Zustandserkennung im Normalbetrieb
 DETECTION_SETTLE_TIME = 4.0    # Erkannter Zustand muss so lange (s) anliegen
-COMMAND_SETTLE_TIME = 8.0      # Nach eigenen Befehlen (s) keine Übernahme
+COMMAND_SETTLE_TIME = 8.0      # Standard für CONF_SYNC_DELAY: nach eigenen Befehlen (s) keine Übernahme
+SYNC_DELAY_MAX = 300           # Obergrenze (s) für CONF_SYNC_DELAY
+RETRY_CHECK_DELAY = 10.0       # Mindestwartezeit (s) bis zur Prüfung, ob ein Befehl gewirkt hat

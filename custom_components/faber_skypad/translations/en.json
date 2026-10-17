@@ -16,7 +16,11 @@
                 "title": "Faber Skypad",
                 "data": {
                     "remote_entity": "Remote Entity",
-                    "power_sensor": "Power Sensor"
+                    "power_sensor": "Power Sensor",
+                    "sync_delay": "Sync delay after commands"
+                },
+                "data_description": {
+                    "sync_delay": "How long (seconds) after an own command the power sensor must not correct the state. Increase for slowly reporting sensors."
                 }
             }
         }
