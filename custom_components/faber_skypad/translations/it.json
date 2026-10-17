@@ -16,7 +16,11 @@
                 "title": "Faber Skypad",
                 "data": {
                     "remote_entity": "Entità remota",
-                    "power_sensor": "Sensore di potenza"
+                    "power_sensor": "Sensore di potenza",
+                    "sync_delay": "Ritardo di sincronizzazione dopo i comandi"
+                },
+                "data_description": {
+                    "sync_delay": "Per quanto tempo (secondi) dopo un comando il sensore di potenza non può correggere lo stato. Aumentare per sensori con aggiornamenti lenti."
                 }
             }
         }

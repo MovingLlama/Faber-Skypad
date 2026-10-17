@@ -23,6 +23,7 @@ from .const import (
     DOMAIN,
     CONF_REMOTE_ENTITY,
     CONF_POWER_SENSOR,
+    CONF_SYNC_DELAY,
     CMD_TURN_ON_OFF,
     CMD_INCREASE,
     CMD_DECREASE,
@@ -46,6 +47,7 @@ from .const import (
     CALIB_POLL_INTERVAL,
     DETECTION_SETTLE_TIME,
     COMMAND_SETTLE_TIME,
+    RETRY_CHECK_DELAY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,8 +84,9 @@ async def async_setup_entry(
     remote_entity = config[CONF_REMOTE_ENTITY]
     power_sensor = config.get(CONF_POWER_SENSOR)
     name = config.get("name", "Faber Skypad")
+    sync_delay = float(config.get(CONF_SYNC_DELAY, COMMAND_SETTLE_TIME))
 
-    fan = FaberFan(hass, name, remote_entity, power_sensor, config_entry, runtime_data)
+    fan = FaberFan(hass, name, remote_entity, power_sensor, config_entry, runtime_data, sync_delay)
     # Fan in Runtime Data registrieren für Button Zugriff
     runtime_data.fan_entity = fan
 
@@ -93,7 +96,7 @@ async def async_setup_entry(
 class FaberFan(FanEntity):
     """Repräsentation des Faber Skypad Lüfters."""
 
-    def __init__(self, hass, name, remote_entity, power_sensor, config_entry, runtime_data):
+    def __init__(self, hass, name, remote_entity, power_sensor, config_entry, runtime_data, sync_delay=COMMAND_SETTLE_TIME):
         self.hass = hass
         self._name = name
         self._remote_entity = remote_entity
@@ -137,6 +140,8 @@ class FaberFan(FanEntity):
         self._pending_detection = None
         self._detection_cancel_fn = None
         self._sync_suppressed_until = 0.0
+        # Sperrzeit nach eigenen Befehlen (konfigurierbar, Entprellung Licht/Lüfter)
+        self._sync_delay = sync_delay
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -290,7 +295,21 @@ class FaberFan(FanEntity):
             )
             return
 
-        level, light_on = self._pending_detection
+        # Mit dem aktuellen Messwert und Lichtzustand neu bewerten: Ein Wert von vor
+        # einem eigenen Befehl darf den neuen Zustand nicht zurückdrehen.
+        current_power = self._read_power()
+        detection = self._match_power(current_power) if current_power is not None else None
+        if detection is None:
+            self._pending_detection = None
+            return
+        if detection != self._pending_detection:
+            self._pending_detection = detection
+            self._detection_cancel_fn = async_call_later(
+                self.hass, DETECTION_SETTLE_TIME, self._async_detection_settled
+            )
+            return
+
+        level, light_on = detection
         self._pending_detection = None
         self._apply_detection(level, light_on)
 
@@ -449,8 +468,10 @@ class FaberFan(FanEntity):
             _LOGGER.debug("Kalibrierung läuft, Befehl %s wird ignoriert.", command)
             return
 
-        # Zustandserkennung erst übernehmen, wenn sich das Gerät eingependelt hat
-        self._sync_suppressed_until = time.monotonic() + COMMAND_SETTLE_TIME
+        # Zustandserkennung erst übernehmen, wenn sich das Gerät eingependelt hat.
+        # Vor dem Befehl erkannte Zustände sind veraltet und werden verworfen.
+        self._sync_suppressed_until = time.monotonic() + self._sync_delay
+        self._cancel_pending_detection()
 
         if not self._power_sensor:
             await self._send_command_raw(command)
@@ -482,8 +503,9 @@ class FaberFan(FanEntity):
         )
         await self._send_command_raw(command)
 
-        # Prüfung nach 10 Sekunden, höchstens CMD_MAX_RETRIES Wiederholungen
-        delay = 10.0
+        # Prüfung frühestens nach RETRY_CHECK_DELAY, bei träge meldenden Sensoren
+        # nach der Sync-Verzögerung; höchstens CMD_MAX_RETRIES Wiederholungen
+        delay = max(RETRY_CHECK_DELAY, self._sync_delay)
 
         self._retry_check_cancel_fn = async_call_later(
             self.hass, delay, self._async_check_power_change

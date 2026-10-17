@@ -16,7 +16,11 @@
                 "title": "Faber Skypad",
                 "data": {
                     "remote_entity": "Remote-Entität",
-                    "power_sensor": "Leistungssensor"
+                    "power_sensor": "Leistungssensor",
+                    "sync_delay": "Sync-Verzögerung nach Befehlen"
+                },
+                "data_description": {
+                    "sync_delay": "Wie lange (Sekunden) nach einem eigenen Befehl der Leistungssensor den Zustand nicht korrigieren darf. Bei träge meldenden Sensoren erhöhen."
                 }
             }
         }
