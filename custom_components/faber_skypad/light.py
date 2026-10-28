@@ -47,6 +47,8 @@ class FaberLight(LightEntity):
         self._entry_id = entry_id
         self._runtime_data = runtime_data
         self._is_on = False
+        # Serialisiert Befehle: Gleichzeitige Aufrufe würden sonst mehrfach umschalten
+        self._command_lock = asyncio.Lock()
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -117,17 +119,19 @@ class FaberLight(LightEntity):
         if self._is_calibrating():
             _LOGGER.warning("Kalibrierung läuft, Licht-Befehl wird ignoriert.")
             return
-        if not self._is_on:
-            await self._send_command(CMD_LIGHT)
-            self._is_on = True
-        self.async_write_ha_state()
+        async with self._command_lock:
+            if not self._is_on:
+                await self._send_command(CMD_LIGHT)
+                self._is_on = True
+            self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         """Ausschalten."""
         if self._is_calibrating():
             _LOGGER.warning("Kalibrierung läuft, Licht-Befehl wird ignoriert.")
             return
-        if self._is_on:
-            await self._send_command(CMD_LIGHT)
-            self._is_on = False
-        self.async_write_ha_state()
+        async with self._command_lock:
+            if self._is_on:
+                await self._send_command(CMD_LIGHT)
+                self._is_on = False
+            self.async_write_ha_state()

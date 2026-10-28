@@ -111,6 +111,8 @@ class FaberFan(FanEntity):
         self._current_speed_step = 0
 
         self._run_on_cancel_fn = None
+        # Serialisiert Steuerbefehle: Gleichzeitige Aufrufe würden sonst mehrfach umschalten
+        self._command_lock = asyncio.Lock()
 
         # Kalibrierungs-Daten
         self._is_calibrating = False
@@ -507,6 +509,8 @@ class FaberFan(FanEntity):
         # nach der Sync-Verzögerung; höchstens CMD_MAX_RETRIES Wiederholungen
         delay = max(RETRY_CHECK_DELAY, self._sync_delay)
 
+        # Immer nur ein Prüf-Timer, sonst folgen mehrere Wiederholungen direkt aufeinander
+        self._cancel_retry_check()
         self._retry_check_cancel_fn = async_call_later(
             self.hass, delay, self._async_check_power_change
         )
@@ -906,6 +910,22 @@ class FaberFan(FanEntity):
         self._run_on_active = False
 
     async def async_turn_on(self, percentage: Optional[int] = None, preset_mode: Optional[str] = None, **kwargs: Any) -> None:
+        async with self._command_lock:
+            await self._async_turn_on(percentage, preset_mode)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        async with self._command_lock:
+            await self._async_turn_off()
+
+    async def async_set_percentage(self, percentage: int) -> None:
+        async with self._command_lock:
+            await self._async_set_percentage(percentage)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        async with self._command_lock:
+            await self._async_set_preset_mode(preset_mode)
+
+    async def _async_turn_on(self, percentage: Optional[int] = None, preset_mode: Optional[str] = None) -> None:
         if self._is_calibrating: return
 
         was_in_run_on = self._run_on_active
@@ -922,13 +942,13 @@ class FaberFan(FanEntity):
             self._percentage = SPEED_MAPPING[1]
         
         if percentage:
-            await self.async_set_percentage(percentage)
+            await self._async_set_percentage(percentage)
         elif preset_mode:
-            await self.async_set_preset_mode(preset_mode)
+            await self._async_set_preset_mode(preset_mode)
             
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def _async_turn_off(self) -> None:
         if self._is_calibrating: return
 
         if (self._is_on and 
@@ -937,7 +957,7 @@ class FaberFan(FanEntity):
             
             _LOGGER.info("Nachlauf aktiviert. Schalte auf Stufe 1 für %s Sekunden.", self._runtime_data.run_on_seconds)
             
-            await self.async_set_percentage(33)
+            await self._async_set_percentage(33)
             
             delay = self._runtime_data.run_on_seconds 
             
@@ -959,7 +979,8 @@ class FaberFan(FanEntity):
         await self._async_execute_final_turn_off()
 
     async def _async_execute_final_turn_off_callback(self, _now):
-        await self._async_execute_final_turn_off()
+        async with self._command_lock:
+            await self._async_execute_final_turn_off()
 
     async def _async_execute_final_turn_off(self):
         was_in_run_on = self._run_on_active
@@ -973,18 +994,18 @@ class FaberFan(FanEntity):
             self._preset_mode = None
             self.async_write_ha_state()
 
-    async def async_set_percentage(self, percentage: int) -> None:
+    async def _async_set_percentage(self, percentage: int) -> None:
         if self._is_calibrating: return
 
         if percentage == 0:
-            await self.async_turn_off()
+            await self._async_turn_off()
             return
             
         if self._run_on_active and percentage != SPEED_MAPPING[1]:
              self._cancel_run_on_timer()
 
         if not self._is_on:
-            await self.async_turn_on()
+            await self._async_turn_on()
 
         target_step = 1
         if percentage > 33: target_step = 2
@@ -1012,19 +1033,19 @@ class FaberFan(FanEntity):
         self._preset_mode = None
         self.async_write_ha_state()
 
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
+    async def _async_set_preset_mode(self, preset_mode: str) -> None:
         if self._is_calibrating: return
         self._cancel_run_on_timer()
         
         if preset_mode == PRESET_BOOST:
             if not self._is_on:
-                await self.async_turn_on()
+                await self._async_turn_on()
             
             await self._send_command(CMD_BOOST)
             self._preset_mode = PRESET_BOOST
             async_call_later(self.hass, 300, self._reset_boost_status)
         else:
-            await self.async_set_percentage(self._percentage)
+            await self._async_set_percentage(self._percentage)
 
         self.async_write_ha_state()
 
